@@ -1,0 +1,12 @@
+[package]
+name = "sqlite2parquet"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+crossterm = "0.22.1"
+parquet = "6.2.0"
+parquet-format = "2.6.1"
+rusqlite = { version = "0.26.1", features = ["column_decltype"] }
+structopt = "0.3.25"
+thousands = "0.2.0"
