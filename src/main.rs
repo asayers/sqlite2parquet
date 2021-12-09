@@ -43,12 +43,14 @@ struct Opts {
     /// The size of each row group
     #[structopt(long, short, default_value = "1000000")]
     group_size: usize,
+    #[structopt(long)]
+    include_schema: bool,
 }
 
 fn main() -> Result<()> {
     let opts = Opts::from_args();
     let conn = rusqlite::Connection::open(&opts.sqlite)?;
-    let tables = if opts.table.is_empty() {
+    let mut tables = if opts.table.is_empty() {
         let mut table_info = conn.prepare(
             "SELECT name
             FROM sqlite_schema
@@ -62,6 +64,9 @@ fn main() -> Result<()> {
     } else {
         opts.table
     };
+    if opts.include_schema {
+        tables.push("sqlite_schema".to_string());
+    }
     std::fs::create_dir_all(&opts.out_dir)?;
     for table in tables {
         let out = opts.out_dir.join(format!("{}.parquet", table));
