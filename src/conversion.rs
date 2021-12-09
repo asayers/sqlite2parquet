@@ -62,10 +62,11 @@ impl FromSqlite for f64 {
 impl FromSqlite for ByteArray {
     fn from_sqlite(x: Value) -> Self {
         match x {
+            Value::Integer(x) => ByteArray::from(Vec::from(x.to_string())),
+            Value::Real(x) => ByteArray::from(Vec::from(x.to_string())),
             Value::Text(x) => ByteArray::from(Vec::from(x)),
             Value::Blob(x) => ByteArray::from(x),
             Value::Null => unreachable!("Nulls are handled separately"),
-            _ => panic!(),
         }
     }
 }

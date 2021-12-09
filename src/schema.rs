@@ -27,7 +27,10 @@ pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<ColInfo>> {
             "JSON" | "BSON" => Type::BYTE_ARRAY,
             "FLOAT" => Type::FLOAT,
             "REAL" | "DOUBLE" => Type::DOUBLE,
-            x => panic!("Unknown type: {}", x),
+            x => {
+                eprintln!("Unknown type: {}", x);
+                Type::BYTE_ARRAY
+            }
         };
         let length = match sql_type.as_str() {
             "UUID" => 16,
