@@ -107,6 +107,7 @@ fn mk_writer(
 
 fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Result<()> {
     let cols = infer_schema(conn, table)?;
+    let n_cols = cols.len() as u64;
 
     print!("Counting rows...");
     std::io::stdout().flush()?;
@@ -139,16 +140,20 @@ fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Re
     let mut n_groups_written = 0;
     let t_start = std::time::Instant::now();
     while n_rows_written < n_rows {
-        print_progress(
-            n_rows_written,
-            n_rows,
-            n_groups_written,
-            t_start.elapsed(),
-            false,
-        )?;
         let mut group_wtr = wtr.next_row_group()?;
         let mut selects_iter = selects.iter_mut();
+        let mut n_cols_written = 0;
         while let Some(mut col_wtr) = group_wtr.next_column()? {
+            print_progress(
+                n_cols_written,
+                n_cols,
+                n_rows_written,
+                n_rows,
+                n_groups_written,
+                group_size,
+                t_start.elapsed(),
+                false,
+            )?;
             let select = selects_iter.next().unwrap().take(group_size);
 
             use parquet::column::writer::ColumnWriter::*;
@@ -163,12 +168,22 @@ fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Re
                 FixedLenByteArrayColumnWriter(wtr) => write_col(select, wtr)?,
             }
             group_wtr.close_column(col_wtr)?;
+            n_cols_written += 1;
         }
         wtr.close_row_group(group_wtr)?;
         n_rows_written += group_size as u64;
         n_groups_written += 1;
     }
-    print_progress(n_rows, n_rows, n_groups_written, t_start.elapsed(), true)?;
+    print_progress(
+        n_cols,
+        n_cols,
+        n_rows,
+        n_rows,
+        n_groups_written,
+        group_size,
+        t_start.elapsed(),
+        true,
+    )?;
 
     let metadata = wtr.close()?;
     summarize(&cols, metadata);
@@ -202,20 +217,27 @@ where
 }
 
 fn print_progress(
+    n_cols_written: u64,
+    n_cols: u64,
     n_rows_written: u64,
     n_rows: u64,
     n_groups: u64,
+    group_size: usize,
     time: std::time::Duration,
     finished: bool,
 ) -> Result<()> {
     use crossterm::*;
     let out = std::io::stderr();
     let mut out = out.lock();
+    let this_group = (n_rows - n_rows_written).min(group_size as u64) as f64;
+    let pc = (n_rows_written as f64 + this_group * n_cols_written as f64 / n_cols as f64)
+        / n_rows as f64
+        * 100.0;
     out.queue(cursor::MoveToColumn(0))?
         .queue(terminal::Clear(terminal::ClearType::CurrentLine))?
         .queue(style::Print(format_args!(
             "[{:.2}%] Wrote {}{} rows as {} group{} in {:.1?}{}",
-            n_rows_written as f64 / n_rows as f64 * 100.0,
+            pc,
             if finished {
                 "".to_string()
             } else {
