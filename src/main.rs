@@ -137,8 +137,15 @@ fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Re
 
     let mut n_rows_written = 0;
     let mut n_groups_written = 0;
+    let t_start = std::time::Instant::now();
     while n_rows_written < n_rows {
-        print_progress(n_rows_written, n_rows, n_groups_written, false)?;
+        print_progress(
+            n_rows_written,
+            n_rows,
+            n_groups_written,
+            t_start.elapsed(),
+            false,
+        )?;
         let mut group_wtr = wtr.next_row_group()?;
         let mut selects_iter = selects.iter_mut();
         while let Some(mut col_wtr) = group_wtr.next_column()? {
@@ -161,7 +168,7 @@ fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Re
         n_rows_written += group_size as u64;
         n_groups_written += 1;
     }
-    print_progress(n_rows, n_rows, n_groups_written, true)?;
+    print_progress(n_rows, n_rows, n_groups_written, t_start.elapsed(), true)?;
 
     let metadata = wtr.close()?;
     summarize(&cols, metadata);
@@ -194,18 +201,30 @@ where
     Ok(())
 }
 
-fn print_progress(n_rows_written: u64, n_rows: u64, n_groups: u64, finished: bool) -> Result<()> {
+fn print_progress(
+    n_rows_written: u64,
+    n_rows: u64,
+    n_groups: u64,
+    time: std::time::Duration,
+    finished: bool,
+) -> Result<()> {
     use crossterm::*;
     let out = std::io::stderr();
     let mut out = out.lock();
     out.queue(cursor::MoveToColumn(0))?
         .queue(terminal::Clear(terminal::ClearType::CurrentLine))?
         .queue(style::Print(format_args!(
-            "[{:.2}%] Wrote {} of {} rows in {} groups{}",
+            "[{:.2}%] Wrote {}{} rows as {} group{} in {:.1?}{}",
             n_rows_written as f64 / n_rows as f64 * 100.0,
-            n_rows_written,
+            if finished {
+                "".to_string()
+            } else {
+                format!("{} of ", n_rows_written)
+            },
             n_rows,
             n_groups,
+            if n_groups == 1 { "" } else { "s" },
+            time,
             if finished { "\n" } else { "..." },
         )))?
         .flush()?;
