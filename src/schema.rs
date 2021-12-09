@@ -10,6 +10,7 @@ pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<ColInfo>> {
     while let Some(row) = iter.next()? {
         let name: String = row.get(1)?;
         let sql_type: String = row.get(2)?;
+        let sql_type = sql_type.to_uppercase();
         let required: bool = row.get(3)?;
         let physical_type = match sql_type.as_str() {
             "BOOL" => Type::BOOLEAN,
