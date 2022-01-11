@@ -904,6 +904,7 @@ name = "sqlite2parquet"
 version = "0.1.0"
 dependencies = [
  "crossterm",
+ "fallible-streaming-iterator",
  "parquet",
  "parquet-format",
  "rusqlite",

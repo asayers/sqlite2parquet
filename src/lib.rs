@@ -3,6 +3,7 @@ mod schema;
 
 use crate::conversion::FromSqlite;
 use crate::schema::*;
+use fallible_streaming_iterator::FallibleStreamingIterator;
 use parquet::file::writer::FileWriter;
 use rusqlite::Connection;
 use std::io::Write;
@@ -129,10 +130,7 @@ fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Re
         .collect::<Vec<_>>();
     let mut selects = select_statements
         .iter_mut()
-        .map(|x| {
-            x.query_map([], |row| row.get::<_, rusqlite::types::Value>(0))
-                .unwrap()
-        })
+        .map(|x| x.query([]).unwrap())
         .collect::<Vec<_>>();
 
     let mut n_rows_written = 0;
@@ -189,8 +187,8 @@ fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Re
     Ok(())
 }
 
-fn write_col<T>(
-    iter: impl Iterator<Item = rusqlite::Result<rusqlite::types::Value>>,
+fn write_col<'a, T>(
+    mut iter: impl FallibleStreamingIterator<Item = rusqlite::Row<'a>, Error = rusqlite::Error>,
     wtr: &mut parquet::column::writer::ColumnWriterImpl<T>,
 ) -> Result<()>
 where
@@ -200,9 +198,9 @@ where
     let mut reps = vec![];
     let mut defs = vec![];
     let mut vals = vec![];
-    for x in iter {
-        let x = x?;
-        if x == rusqlite::types::Value::Null {
+    while let Some(x) = iter.next()? {
+        let x = x.get_ref(0)?;
+        if x == rusqlite::types::ValueRef::Null {
             reps.push(0);
             defs.push(0);
         } else {
