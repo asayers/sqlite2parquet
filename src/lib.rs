@@ -2,7 +2,7 @@ mod conversion;
 mod schema;
 
 use crate::conversion::FromSqlite;
-use crate::schema::*;
+pub use crate::schema::*;
 use fallible_streaming_iterator::FallibleStreamingIterator;
 use parquet::file::writer::FileWriter;
 use rusqlite::Connection;
@@ -75,8 +75,8 @@ pub fn run(opts: Opts) -> Result<()> {
     Ok(())
 }
 
-fn mk_writer(
-    table: &str,
+pub fn mk_writer(
+    table_name: &str,
     cols: &[ColInfo],
     out: &Path,
 ) -> Result<impl parquet::file::writer::FileWriter> {
@@ -84,7 +84,7 @@ fn mk_writer(
         .iter()
         .map(|col| Arc::new(col.clone().as_parquet().unwrap()))
         .collect::<Vec<_>>();
-    let schema = parquet::schema::types::Type::group_type_builder(table)
+    let schema = parquet::schema::types::Type::group_type_builder(table_name)
         .with_fields(&mut fields)
         .build()?;
     let mut bldr = parquet::file::properties::WriterProperties::builder()
@@ -172,7 +172,7 @@ fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Re
     Ok(())
 }
 
-fn write_group<'a>(
+pub fn write_group<'a>(
     wtr: &mut impl parquet::file::writer::FileWriter,
     mut selects: Vec<
         impl FallibleStreamingIterator<Item = rusqlite::Row<'a>, Error = rusqlite::Error>,
