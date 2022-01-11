@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.52"
 crossterm = "0.22.1"
 fallible-streaming-iterator = "0.1.9"
 parquet = "6.2.0"

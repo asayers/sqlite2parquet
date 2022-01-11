@@ -3,6 +3,7 @@ mod schema;
 
 use crate::conversion::FromSqlite;
 pub use crate::schema::*;
+use anyhow::Result;
 use fallible_streaming_iterator::FallibleStreamingIterator;
 use parquet::file::writer::FileWriter;
 use rusqlite::Connection;
@@ -10,8 +11,6 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use structopt::StructOpt;
-
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync + 'static>>;
 
 /// Extracts data from a sqlite3 DB and writes to parquet files.
 ///
