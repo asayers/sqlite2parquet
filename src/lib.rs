@@ -137,10 +137,11 @@ fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Re
     let mut n_groups_written = 0;
     let t_start = std::time::Instant::now();
     while n_rows_written < n_rows {
-        let mut group_wtr = wtr.next_row_group()?;
-        let mut selects_iter = selects.iter_mut();
-        let mut n_cols_written = 0;
-        while let Some(mut col_wtr) = group_wtr.next_column()? {
+        let selects = selects
+            .iter_mut()
+            .map(|x| x.take(group_size))
+            .collect::<Vec<_>>();
+        write_group(&mut wtr, selects, |n_cols_written| {
             print_progress(
                 n_cols_written,
                 n_cols,
@@ -150,24 +151,8 @@ fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Re
                 group_size,
                 t_start.elapsed(),
                 false,
-            )?;
-            let select = selects_iter.next().unwrap().take(group_size);
-
-            use parquet::column::writer::ColumnWriter::*;
-            match &mut col_wtr {
-                BoolColumnWriter(wtr) => write_col(select, wtr)?,
-                Int32ColumnWriter(wtr) => write_col(select, wtr)?,
-                Int64ColumnWriter(wtr) => write_col(select, wtr)?,
-                Int96ColumnWriter(wtr) => write_col(select, wtr)?,
-                FloatColumnWriter(wtr) => write_col(select, wtr)?,
-                DoubleColumnWriter(wtr) => write_col(select, wtr)?,
-                ByteArrayColumnWriter(wtr) => write_col(select, wtr)?,
-                FixedLenByteArrayColumnWriter(wtr) => write_col(select, wtr)?,
-            }
-            group_wtr.close_column(col_wtr)?;
-            n_cols_written += 1;
-        }
-        wtr.close_row_group(group_wtr)?;
+            )
+        })?;
         n_rows_written += group_size as u64;
         n_groups_written += 1;
     }
@@ -184,6 +169,38 @@ fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Re
 
     let metadata = wtr.close()?;
     summarize(&cols, metadata);
+    Ok(())
+}
+
+fn write_group<'a>(
+    wtr: &mut impl parquet::file::writer::FileWriter,
+    mut selects: Vec<
+        impl FallibleStreamingIterator<Item = rusqlite::Row<'a>, Error = rusqlite::Error>,
+    >,
+    mut progress_cb: impl FnMut(u64) -> Result<()>,
+) -> Result<()> {
+    let mut group_wtr = wtr.next_row_group()?;
+    let mut selects_iter = selects.iter_mut();
+    let mut n_cols_written = 0;
+    while let Some(mut col_wtr) = group_wtr.next_column()? {
+        progress_cb(n_cols_written)?;
+        let select = selects_iter.next().unwrap();
+
+        use parquet::column::writer::ColumnWriter::*;
+        match &mut col_wtr {
+            BoolColumnWriter(wtr) => write_col(select, wtr)?,
+            Int32ColumnWriter(wtr) => write_col(select, wtr)?,
+            Int64ColumnWriter(wtr) => write_col(select, wtr)?,
+            Int96ColumnWriter(wtr) => write_col(select, wtr)?,
+            FloatColumnWriter(wtr) => write_col(select, wtr)?,
+            DoubleColumnWriter(wtr) => write_col(select, wtr)?,
+            ByteArrayColumnWriter(wtr) => write_col(select, wtr)?,
+            FixedLenByteArrayColumnWriter(wtr) => write_col(select, wtr)?,
+        }
+        group_wtr.close_column(col_wtr)?;
+        n_cols_written += 1;
+    }
+    wtr.close_row_group(group_wtr)?;
     Ok(())
 }
 
