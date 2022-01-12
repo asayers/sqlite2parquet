@@ -72,12 +72,6 @@ pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<ColInfo>> {
         };
         infos.push(info);
     }
-
-    println!("{}:", table);
-    for col in &infos {
-        println!("    {}", col);
-    }
-
     Ok(infos)
 }
 

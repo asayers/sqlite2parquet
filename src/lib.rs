@@ -106,6 +106,11 @@ pub fn mk_writer(
 
 fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Result<()> {
     let cols = infer_schema(conn, table)?;
+    println!("{}:", table);
+    for col in &cols {
+        println!("    {}", col);
+    }
+
     let n_cols = cols.len() as u64;
 
     print!("Counting rows...");
