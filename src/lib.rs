@@ -120,30 +120,18 @@ fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Re
 
     let mut wtr = mk_writer(table, &cols, out)?;
 
-    let mut select_statements = cols
+    let queries = cols
         .iter()
-        .map(|col| {
-            conn.prepare(&format!("SELECT {} FROM {}", col.name, table))
-                .unwrap()
-        })
+        .map(|col| format!("SELECT {} FROM {}", col.name, table))
         .collect::<Vec<_>>();
-    let mut selects = select_statements
-        .iter_mut()
-        .map(|x| x.query([]).unwrap())
-        .collect::<Vec<_>>();
-    for s in &mut selects {
-        s.advance()?;
-    }
 
-    let mut n_rows_written = 0;
-    let mut n_groups_written = 0;
     let t_start = std::time::Instant::now();
-    while selects[0].get().is_some() {
-        let selects = selects
-            .iter_mut()
-            .map(|x| x.take(group_size))
-            .collect::<Vec<_>>();
-        write_group(&mut wtr, selects, |n_cols_written| {
+    let n_groups_written = write_table(
+        conn,
+        &mut wtr,
+        &queries,
+        group_size,
+        |n_cols_written, n_rows_written, n_groups_written| {
             print_progress(
                 n_cols_written,
                 n_cols,
@@ -154,10 +142,8 @@ fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Re
                 t_start.elapsed(),
                 false,
             )
-        })?;
-        n_rows_written += group_size as u64;
-        n_groups_written += 1;
-    }
+        },
+    )?;
     print_progress(
         n_cols,
         n_cols,
@@ -174,7 +160,42 @@ fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Re
     Ok(())
 }
 
-pub fn write_group<'a>(
+pub fn write_table<'a>(
+    conn: &Connection,
+    wtr: &mut impl parquet::file::writer::FileWriter,
+    queries: &[String],
+    group_size: usize,
+    mut progress_cb: impl FnMut(u64, u64, u64) -> Result<()>,
+) -> Result<u64> {
+    let mut stmnts = queries
+        .iter()
+        .map(|sql| conn.prepare(sql).unwrap())
+        .collect::<Vec<_>>();
+    let mut selects = stmnts
+        .iter_mut()
+        .map(|x| x.query([]).unwrap())
+        .collect::<Vec<_>>();
+    for s in &mut selects {
+        s.advance()?;
+    }
+
+    let mut n_rows_written = 0;
+    let mut n_groups_written = 0;
+    while selects[0].get().is_some() {
+        let selects = selects
+            .iter_mut()
+            .map(|x| x.take(group_size))
+            .collect::<Vec<_>>();
+        write_group(wtr, selects, |n_cols_written| {
+            progress_cb(n_cols_written, n_rows_written, n_groups_written)
+        })?;
+        n_rows_written += group_size as u64;
+        n_groups_written += 1;
+    }
+    Ok(n_groups_written)
+}
+
+fn write_group<'a>(
     wtr: &mut impl parquet::file::writer::FileWriter,
     mut selects: Vec<
         impl FallibleStreamingIterator<Item = rusqlite::Row<'a>, Error = rusqlite::Error>,
