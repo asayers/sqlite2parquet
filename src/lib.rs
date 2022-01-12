@@ -131,11 +131,14 @@ fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Re
         .iter_mut()
         .map(|x| x.query([]).unwrap())
         .collect::<Vec<_>>();
+    for s in &mut selects {
+        s.advance()?;
+    }
 
     let mut n_rows_written = 0;
     let mut n_groups_written = 0;
     let t_start = std::time::Instant::now();
-    while n_rows_written < n_rows {
+    while selects[0].get().is_some() {
         let selects = selects
             .iter_mut()
             .map(|x| x.take(group_size))
@@ -214,7 +217,11 @@ where
     let mut reps = vec![];
     let mut defs = vec![];
     let mut vals = vec![];
-    while let Some(x) = iter.next()? {
+    loop {
+        let x = match iter.get() {
+            Some(x) => x,
+            None => break,
+        };
         let x = x.get_ref(0)?;
         if x == rusqlite::types::ValueRef::Null {
             reps.push(0);
@@ -224,6 +231,7 @@ where
             defs.push(1);
             vals.push(T::T::from_sqlite(x));
         }
+        iter.advance()?;
     }
     wtr.write_batch(&vals, Some(&defs), Some(&reps)).unwrap();
     Ok(())
