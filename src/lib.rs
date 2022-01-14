@@ -3,7 +3,7 @@ mod schema;
 
 use crate::conversion::FromSqlite;
 pub use crate::schema::*;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use fallible_streaming_iterator::FallibleStreamingIterator;
 use parquet::file::writer::FileWriter;
 use rusqlite::Connection;
@@ -193,7 +193,8 @@ pub fn write_table<'a>(
             .collect::<Vec<_>>();
         write_group(wtr, selects, |n_cols_written| {
             progress_cb(n_cols_written, n_rows_written, n_groups_written)
-        })?;
+        })
+        .context(format!("Group {}", n_groups_written))?;
         n_rows_written += group_size as u64;
         n_groups_written += 1;
     }
@@ -215,17 +216,20 @@ fn write_group<'a>(
         let select = selects_iter.next().unwrap();
 
         use parquet::column::writer::ColumnWriter::*;
-        match &mut col_wtr {
-            BoolColumnWriter(wtr) => write_col(select, wtr)?,
-            Int32ColumnWriter(wtr) => write_col(select, wtr)?,
-            Int64ColumnWriter(wtr) => write_col(select, wtr)?,
-            Int96ColumnWriter(wtr) => write_col(select, wtr)?,
-            FloatColumnWriter(wtr) => write_col(select, wtr)?,
-            DoubleColumnWriter(wtr) => write_col(select, wtr)?,
-            ByteArrayColumnWriter(wtr) => write_col(select, wtr)?,
-            FixedLenByteArrayColumnWriter(wtr) => write_col(select, wtr)?,
-        }
-        group_wtr.close_column(col_wtr)?;
+        let x = match &mut col_wtr {
+            BoolColumnWriter(wtr) => write_col(select, wtr),
+            Int32ColumnWriter(wtr) => write_col(select, wtr),
+            Int64ColumnWriter(wtr) => write_col(select, wtr),
+            Int96ColumnWriter(wtr) => write_col(select, wtr),
+            FloatColumnWriter(wtr) => write_col(select, wtr),
+            DoubleColumnWriter(wtr) => write_col(select, wtr),
+            ByteArrayColumnWriter(wtr) => write_col(select, wtr),
+            FixedLenByteArrayColumnWriter(wtr) => write_col(select, wtr),
+        };
+        x.context(format!("Column {}", n_cols_written))?;
+        group_wtr
+            .close_column(col_wtr)
+            .context(format!("Column {}", n_cols_written))?;
         n_cols_written += 1;
     }
     wtr.close_row_group(group_wtr)?;
