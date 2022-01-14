@@ -62,6 +62,7 @@ pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<ColInfo>> {
             // TODO: Try to figure out when to do DELTA_BINARY_PACKED and when to leave it as RLE
             _ => None,
         };
+        let query = format!("SELECT {} FROM {}", name, table);
         let info = ColInfo {
             name,
             physical_type,
@@ -69,6 +70,7 @@ pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<ColInfo>> {
             length,
             repetition,
             encoding,
+            query,
         };
         infos.push(info);
     }
@@ -82,13 +84,14 @@ pub struct ColInfo {
     pub length: i32,
     pub logical_type: Option<LogicalType>,
     pub encoding: Option<Encoding>,
+    pub query: String,
 }
 
 impl fmt::Display for ColInfo {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{:20} {} {:20}{}{}{}",
+            "{:20} {} {:20}{}{}{} {}",
             self.name,
             self.repetition,
             self.physical_type.to_string(),
@@ -107,6 +110,7 @@ impl fmt::Display for ColInfo {
             } else {
                 "".to_string()
             },
+            self.query,
         )
     }
 }

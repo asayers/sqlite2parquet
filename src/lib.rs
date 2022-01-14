@@ -74,7 +74,7 @@ pub fn run(opts: Opts) -> Result<()> {
     Ok(())
 }
 
-pub fn mk_writer(
+fn mk_writer(
     table_name: &str,
     cols: &[ColInfo],
     out: &Path,
@@ -123,18 +123,12 @@ fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Re
     let group_size = group_size.max(1);
     println!("Group size: {}", group_size);
 
-    let mut wtr = mk_writer(table, &cols, out)?;
-
-    let queries = cols
-        .iter()
-        .map(|col| format!("SELECT {} FROM {}", col.name, table))
-        .collect::<Vec<_>>();
-
     let t_start = std::time::Instant::now();
-    let n_groups_written = write_table(
+    let (n_groups_written, metadata) = write_table(
         conn,
-        &mut wtr,
-        &queries,
+        table,
+        &cols,
+        out,
         group_size,
         |n_cols_written, n_rows_written, n_groups_written| {
             print_progress(
@@ -160,21 +154,23 @@ fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Re
         true,
     )?;
 
-    let metadata = wtr.close()?;
     summarize(&cols, metadata);
     Ok(())
 }
 
 pub fn write_table<'a>(
     conn: &Connection,
-    wtr: &mut impl parquet::file::writer::FileWriter,
-    queries: &[String],
+    table_name: &str,
+    cols: &[ColInfo],
+    out: &Path,
     group_size: usize,
     mut progress_cb: impl FnMut(u64, u64, u64) -> Result<()>,
-) -> Result<u64> {
-    let mut stmnts = queries
+) -> Result<(u64, parquet_format::FileMetaData)> {
+    let mut wtr = mk_writer(table_name, &cols, out)?;
+
+    let mut stmnts = cols
         .iter()
-        .map(|sql| conn.prepare(sql).unwrap())
+        .map(|col| conn.prepare(&col.query).unwrap())
         .collect::<Vec<_>>();
     let mut selects = stmnts
         .iter_mut()
@@ -191,14 +187,15 @@ pub fn write_table<'a>(
             .iter_mut()
             .map(|x| x.take(group_size))
             .collect::<Vec<_>>();
-        write_group(wtr, selects, |n_cols_written| {
+        write_group(&mut wtr, selects, |n_cols_written| {
             progress_cb(n_cols_written, n_rows_written, n_groups_written)
         })
         .context(format!("Group {}", n_groups_written))?;
         n_rows_written += group_size as u64;
         n_groups_written += 1;
     }
-    Ok(n_groups_written)
+    let metadata = wtr.close()?;
+    Ok((n_groups_written, metadata))
 }
 
 fn write_group<'a>(
