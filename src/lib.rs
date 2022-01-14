@@ -1,3 +1,66 @@
+/*! Generate parquet files from sqlite databases
+
+This library provides two things:
+
+1. A flexible way to generate a parquet file from a bunch of SQL statements
+2. A way to generate the neccessary config for writing a whole table to a parquet file
+
+## The flexible way
+
+Explicitly define the columns that will go in the parquet file.  One thing
+to be careful about: the `SELECT` queries must all return the same number
+of rows.  If not, you'll get a runtime error.
+
+```rust
+let conn = rusqlite::Connection::open_in_memory().unwrap();
+conn.execute("CREATE TABLE my_table (category TEXT, timestamp DATETIME)", []);
+
+use parquet::basic::*;
+use parquet_format::NanoSeconds;
+let cols = vec![
+    sqlite2parquet::Column {
+        name: "category".to_string(),
+        repetition: Repetition::REQUIRED,
+        length: 0,
+        physical_type: Type::BYTE_ARRAY,
+        logical_type: Some(LogicalType::STRING(StringType::new())),
+        encoding: None,
+        query: "SELECT category FROM my_table GROUP BY category ORDER BY MIN(timestamp)".to_string(),
+    },
+    sqlite2parquet::Column {
+        name: "first_timestamp".to_string(),
+        repetition: Repetition::REQUIRED,
+        length: 0,
+        physical_type: Type::INT64,
+        logical_type: Some(LogicalType::TIMESTAMP(TimestampType::new(true, TimeUnit::NANOS(NanoSeconds::new())))),
+        encoding: Some(Encoding::DELTA_BINARY_PACKED),
+        query: "SELECT MIN(timestamp) FROM my_table GROUP BY category ORDER BY MIN(timestamp)".to_string(),
+    },
+];
+
+let out_path = std::path::PathBuf::from("category_start_times.parquet");
+let cb = |_, _, _| Ok(());
+sqlite2parquet::write_table(&conn, "category_start_times", &cols, &out_path, 1_000_000, cb).unwrap();
+```
+
+## The easy way
+
+If you just want to dump the whole table as-is into a parquet file, you can
+use the handy [`infer_schema()`].  It tries to guess the best encoding based
+on the sqlite schema.
+
+```rust
+let conn = rusqlite::Connection::open_in_memory().unwrap();
+conn.execute("CREATE TABLE my_table (category TEXT, timestamp DATETIME)", []);
+
+let cols = sqlite2parquet::infer_schema(&conn, "my_table").unwrap();
+let out_path = std::path::PathBuf::from("my_table.parquet");
+let cb = |_, _, _| Ok(());
+sqlite2parquet::write_table(&conn, "my_table", &cols, &out_path, 1_000_000, cb).unwrap();
+```
+
+ */
+
 mod conversion;
 mod schema;
 
