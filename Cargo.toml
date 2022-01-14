@@ -1,8 +1,11 @@
 [package]
 name = "sqlite2parquet"
+description = "Generate parquet files from sqlite databases"
 version = "0.1.0"
+authors = ["Alex Sayers <alex@asayers.com>"]
 edition = "2021"
 license = "Unlicense"
+repository = "https://github.com/asayers/sqlite2parquet"
 
 [dependencies]
 anyhow = "1.0.52"
