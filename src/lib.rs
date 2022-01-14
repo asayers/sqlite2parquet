@@ -39,8 +39,7 @@ let cols = vec![
 ];
 
 let out_path = std::path::PathBuf::from("category_start_times.parquet");
-let cb = |_, _, _| Ok(());
-sqlite2parquet::write_table(&conn, "category_start_times", &cols, &out_path, 1_000_000, cb).unwrap();
+sqlite2parquet::write_table(&conn, "category_start_times", &cols, &out_path, 1_000_000).unwrap();
 ```
 
 ## The easy way
@@ -55,8 +54,7 @@ conn.execute("CREATE TABLE my_table (category TEXT, timestamp DATETIME)", []);
 
 let cols = sqlite2parquet::infer_schema(&conn, "my_table").unwrap();
 let out_path = std::path::PathBuf::from("my_table.parquet");
-let cb = |_, _, _| Ok(());
-sqlite2parquet::write_table(&conn, "my_table", &cols, &out_path, 1_000_000, cb).unwrap();
+sqlite2parquet::write_table(&conn, "my_table", &cols, &out_path, 1_000_000).unwrap();
 ```
 
  */
@@ -104,6 +102,17 @@ fn mk_writer(
 }
 
 pub fn write_table<'a>(
+    conn: &Connection,
+    table_name: &str,
+    cols: &[Column],
+    out: &Path,
+    group_size: usize,
+) -> Result<(u64, parquet_format::FileMetaData)> {
+    let cb = |_, _, _| Ok(());
+    write_table_with_progress(conn, table_name, cols, out, group_size, cb)
+}
+
+pub fn write_table_with_progress<'a>(
     conn: &Connection,
     table_name: &str,
     cols: &[Column],

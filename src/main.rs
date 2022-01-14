@@ -88,7 +88,7 @@ fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Re
     println!("Group size: {}", group_size);
 
     let t_start = std::time::Instant::now();
-    let (n_groups_written, metadata) = sqlite2parquet::write_table(
+    let (n_groups_written, metadata) = sqlite2parquet::write_table_with_progress(
         conn,
         table,
         &cols,
