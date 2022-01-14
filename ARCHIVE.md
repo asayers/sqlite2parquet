@@ -13,7 +13,7 @@ Let's compare parquet archival to simple zstd.  For zstd:
 * Compression ratio of 4x (in this test)
 * In-place queries are impossible; you have to decompress first.
 * Decompressing back to the original database is quite fast, and you get
-  the exact same sqlite database file you started with.
+  back all your indices etc.
 
 For parquet:
 
@@ -24,5 +24,11 @@ For parquet:
   because there are no secondary indices.  Some queries (esp. simple queries)
   are faster, thanks to the pre-computed summary statistics.
 * Restoring the original sqlite database is slower, in part because the
-  indices need to be rebuilt.  Also, while the data should all be the same,
-  the database may be slightly different internally compared to the original.
+  indices need to be rebuilt.
+
+Note that roundtripping through parquet and back will (_should_!) restore all
+your data, but the internals of the sqlite DB may be different.  Bear this
+in mind if you're eg. rsyncing sqlite files around.  You may want to look
+into the [sha3sum] dot command.
+
+[sha3sum]: https://www.sqlite.org/cli.html#cryptographic_hashes_of_database_content
