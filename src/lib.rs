@@ -3,7 +3,14 @@
 This library provides two things:
 
 1. A flexible way to generate a parquet file from a bunch of SQL statements
-2. A way to generate the neccessary config for writing a whole table to a parquet file
+2. A way to generate the neccessary config for writing a whole table to a
+   parquet file
+
+This package also contains a binary crate which lets you easily compress
+a whole sqlite DB into a bunch of parquet files.  This typically
+gets a better compression ratio than xz, and is much faster.  See
+[ARCHIVE](https://github.com/asayers/sqlite2parquet/blob/master/ARCHIVE.md)
+for a comparison.
 
 ## The flexible way
 
