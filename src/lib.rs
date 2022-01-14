@@ -114,7 +114,7 @@ pub fn write_table<'a>(
     cols: &[Column],
     out: &Path,
     group_size: usize,
-) -> Result<(u64, parquet_format::FileMetaData)> {
+) -> Result<parquet_format::FileMetaData> {
     let cb = |_, _, _| Ok(());
     write_table_with_progress(conn, table_name, cols, out, group_size, cb)
 }
@@ -126,7 +126,7 @@ pub fn write_table_with_progress<'a>(
     out: &Path,
     group_size: usize,
     mut progress_cb: impl FnMut(u64, u64, u64) -> Result<()>,
-) -> Result<(u64, parquet_format::FileMetaData)> {
+) -> Result<parquet_format::FileMetaData> {
     let mut wtr = mk_writer(table_name, &cols, out)?;
 
     let mut stmnts = cols
@@ -156,7 +156,7 @@ pub fn write_table_with_progress<'a>(
         n_groups_written += 1;
     }
     let metadata = wtr.close()?;
-    Ok((n_groups_written, metadata))
+    Ok(metadata)
 }
 
 fn write_group<'a>(
