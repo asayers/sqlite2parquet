@@ -2,6 +2,7 @@
 name = "sqlite2parquet"
 version = "0.1.0"
 edition = "2021"
+license = "Unlicense"
 
 [dependencies]
 anyhow = "1.0.52"
