@@ -3,7 +3,7 @@ use parquet::basic::*;
 use rusqlite::Connection;
 use std::fmt;
 
-pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<ColInfo>> {
+pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<Column>> {
     let mut infos = vec![];
     let mut table_info = conn.prepare(&format!("SELECT * FROM pragma_table_info('{}')", table))?;
     let mut iter = table_info.query([])?;
@@ -63,7 +63,7 @@ pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<ColInfo>> {
             _ => None,
         };
         let query = format!("SELECT {} FROM {}", name, table);
-        let info = ColInfo {
+        let info = Column {
             name,
             physical_type,
             logical_type,
@@ -77,7 +77,7 @@ pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<ColInfo>> {
     Ok(infos)
 }
 
-pub struct ColInfo {
+pub struct Column {
     pub name: String,
     pub repetition: Repetition,
     pub physical_type: Type,
@@ -87,7 +87,7 @@ pub struct ColInfo {
     pub query: String,
 }
 
-impl fmt::Display for ColInfo {
+impl fmt::Display for Column {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -115,7 +115,7 @@ impl fmt::Display for ColInfo {
     }
 }
 
-impl ColInfo {
+impl Column {
     pub fn as_parquet(&self) -> Result<parquet::schema::types::Type> {
         Ok(
             parquet::schema::types::Type::primitive_type_builder(&self.name, self.physical_type)

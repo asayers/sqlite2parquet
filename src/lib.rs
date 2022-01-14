@@ -76,7 +76,7 @@ pub fn run(opts: Opts) -> Result<()> {
 
 fn mk_writer(
     table_name: &str,
-    cols: &[ColInfo],
+    cols: &[Column],
     out: &Path,
 ) -> Result<impl parquet::file::writer::FileWriter> {
     let mut fields = cols
@@ -161,7 +161,7 @@ fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Re
 pub fn write_table<'a>(
     conn: &Connection,
     table_name: &str,
-    cols: &[ColInfo],
+    cols: &[Column],
     out: &Path,
     group_size: usize,
     mut progress_cb: impl FnMut(u64, u64, u64) -> Result<()>,
@@ -301,7 +301,7 @@ fn print_progress(
     Ok(())
 }
 
-fn summarize(cols: &[ColInfo], metadata: parquet_format::FileMetaData) {
+fn summarize(cols: &[Column], metadata: parquet_format::FileMetaData) {
     fn fmt_bytes(bytes: i64) -> String {
         use thousands::Separable;
         format!("{:>9} KiB", (bytes / 1024).separate_with_commas())
