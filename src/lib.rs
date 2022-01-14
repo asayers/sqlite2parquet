@@ -108,6 +108,19 @@ fn mk_writer(
     )?)
 }
 
+/// Creates a parquet file from a set of SQL queries.
+///
+/// Data is read from the sqlite DB `conn` and written to the file `out`.
+/// The contents of the parquet file are defined by `cols`.  `table_name`
+/// is just metadata that will go in the parquet schema - it can be an
+/// arbitrary string.
+///
+/// The data is split into row groups of length `group_size`.  Make this
+/// too small and you won't get very good compression; but be aware that in
+/// parquet the row group is the unit of random access: eg. if a consumer
+/// wants to read the final row in a group, it has to start at the beginning
+/// of the group and decompress to the end.  I would suggest 100k to 1M is
+/// a sensible default.
 pub fn write_table<'a>(
     conn: &Connection,
     table_name: &str,
@@ -119,6 +132,16 @@ pub fn write_table<'a>(
     write_table_with_progress(conn, table_name, cols, out, group_size, cb)
 }
 
+/// Like [`write_table()`], but lets you provide a callback which is called
+/// regularly.
+///
+/// The arguments of the callback are:
+///
+/// * Number of columns written within the current (incomplete) row group
+/// * Number of rows fully written
+/// * Number of row groups fully written
+///
+/// For more information, see the docs for [`write_table()`].
 pub fn write_table_with_progress<'a>(
     conn: &Connection,
     table_name: &str,
