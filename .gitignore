@@ -1,1 +1,4 @@
 /target
+.history
+*.sqlite3
+*.parquet
