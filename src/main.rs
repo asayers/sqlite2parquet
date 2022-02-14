@@ -139,7 +139,7 @@ fn print_progress(
     let pc = (n_rows_written as f64 + this_group * n_cols_written as f64 / n_cols as f64)
         / n_rows as f64
         * 100.0;
-    out.queue(cursor::MoveToColumn(0))?
+    out.queue(cursor::MoveToColumn(1))?
         .queue(terminal::Clear(terminal::ClearType::CurrentLine))?
         .queue(style::Print(format_args!(
             "[{:.2}%] Wrote {}{} rows as {} group{} in {:.1?}{}",
