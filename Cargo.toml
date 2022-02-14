@@ -15,7 +15,7 @@ anyhow = "1.0.52"
 chrono = { version = "0.4.19", default-features = false, features = ["clock"] }
 crossterm = "0.22.1"
 fallible-streaming-iterator = "0.1.9"
-parquet = { version = "8.0.0", default-features = false, features = ["zstd", "experimental"] }
+parquet = { version = "9.0.2", default-features = false, features = ["zstd"] }
 parquet-format = "4.0.0"
 rusqlite = "0.26.1"
 structopt = "0.3.25"
