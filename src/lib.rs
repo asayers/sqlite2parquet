@@ -159,7 +159,7 @@ pub fn write_table_with_progress<'a>(
     let mut selects = stmnts
         .iter_mut()
         .map(|x| x.query([]).unwrap())
-        .collect::<Vec<_>>();
+        .collect::<Vec<rusqlite::Rows>>();
     for s in &mut selects {
         s.advance()?;
     }
@@ -167,11 +167,7 @@ pub fn write_table_with_progress<'a>(
     let mut n_rows_written = 0;
     let mut n_groups_written = 0;
     while selects[0].get().is_some() {
-        let selects = selects
-            .iter_mut()
-            .map(|x| x.take(group_size))
-            .collect::<Vec<_>>();
-        write_group(&mut wtr, selects, |n_cols_written| {
+        write_group(&mut wtr, &mut selects, group_size, |n_cols_written| {
             progress_cb(n_cols_written, n_rows_written, n_groups_written)
         })
         .context(format!("Group {}", n_groups_written))?;
@@ -184,9 +180,8 @@ pub fn write_table_with_progress<'a>(
 
 fn write_group<'a>(
     wtr: &mut impl parquet::file::writer::FileWriter,
-    mut selects: Vec<
-        impl FallibleStreamingIterator<Item = rusqlite::Row<'a>, Error = rusqlite::Error>,
-    >,
+    selects: &mut [rusqlite::Rows],
+    group_size: usize,
     mut progress_cb: impl FnMut(u64) -> Result<()>,
 ) -> Result<()> {
     let mut group_wtr = wtr.next_row_group()?;
@@ -198,14 +193,14 @@ fn write_group<'a>(
 
         use parquet::column::writer::ColumnWriter::*;
         let x = match &mut col_wtr {
-            BoolColumnWriter(wtr) => write_col(select, wtr),
-            Int32ColumnWriter(wtr) => write_col(select, wtr),
-            Int64ColumnWriter(wtr) => write_col(select, wtr),
-            Int96ColumnWriter(wtr) => write_col(select, wtr),
-            FloatColumnWriter(wtr) => write_col(select, wtr),
-            DoubleColumnWriter(wtr) => write_col(select, wtr),
-            ByteArrayColumnWriter(wtr) => write_col(select, wtr),
-            FixedLenByteArrayColumnWriter(wtr) => write_col(select, wtr),
+            BoolColumnWriter(wtr) => write_col(select, group_size, wtr),
+            Int32ColumnWriter(wtr) => write_col(select, group_size, wtr),
+            Int64ColumnWriter(wtr) => write_col(select, group_size, wtr),
+            Int96ColumnWriter(wtr) => write_col(select, group_size, wtr),
+            FloatColumnWriter(wtr) => write_col(select, group_size, wtr),
+            DoubleColumnWriter(wtr) => write_col(select, group_size, wtr),
+            ByteArrayColumnWriter(wtr) => write_col(select, group_size, wtr),
+            FixedLenByteArrayColumnWriter(wtr) => write_col(select, group_size, wtr),
         };
         x.context(format!("Column {}", n_cols_written))?;
         group_wtr
@@ -218,7 +213,8 @@ fn write_group<'a>(
 }
 
 fn write_col<'a, T>(
-    mut iter: impl FallibleStreamingIterator<Item = rusqlite::Row<'a>, Error = rusqlite::Error>,
+    iter: &mut rusqlite::Rows,
+    group_size: usize,
     wtr: &mut parquet::column::writer::ColumnWriterImpl<T>,
 ) -> Result<()>
 where
@@ -228,7 +224,7 @@ where
     let mut reps = vec![];
     let mut defs = vec![];
     let mut vals = vec![];
-    loop {
+    for _ in 0..group_size {
         let x = match iter.get() {
             Some(x) => x,
             None => break,
