@@ -13,7 +13,7 @@ anyhow = "1.0.52"
 # parquet's Cargo.toml is slightly buggy, so if we don't specify chrono here
 # then parquet fails to compile.
 chrono = { version = "0.4.19", default-features = false, features = ["clock"] }
-crossterm = "0.22.1"
+crossterm = "0.23.0"
 fallible-streaming-iterator = "0.1.9"
 parquet = { version = "9.0.2", default-features = false, features = ["zstd"] }
 parquet-format = "4.0.0"
