@@ -83,7 +83,7 @@ fn mk_writer(
 ) -> Result<impl parquet::file::writer::FileWriter> {
     let mut fields = cols
         .iter()
-        .map(|col| Arc::new(col.clone().as_parquet().unwrap()))
+        .map(|col| Arc::new(col.as_parquet().unwrap()))
         .collect::<Vec<_>>();
     let schema = parquet::schema::types::Type::group_type_builder(table_name)
         .with_fields(&mut fields)
@@ -119,7 +119,7 @@ fn mk_writer(
 /// wants to read the final row in a group, it has to start at the beginning
 /// of the group and decompress to the end.  I would suggest 100k to 1M is
 /// a sensible default.
-pub fn write_table<'a>(
+pub fn write_table(
     conn: &Connection,
     table_name: &str,
     cols: &[Column],
@@ -140,7 +140,7 @@ pub fn write_table<'a>(
 /// * Number of row groups fully written
 ///
 /// For more information, see the docs for [`write_table()`].
-pub fn write_table_with_progress<'a>(
+pub fn write_table_with_progress(
     conn: &Connection,
     table_name: &str,
     cols: &[Column],
@@ -148,7 +148,7 @@ pub fn write_table_with_progress<'a>(
     group_size: usize,
     mut progress_cb: impl FnMut(u64, u64, u64) -> Result<()>,
 ) -> Result<parquet_format::FileMetaData> {
-    let mut wtr = mk_writer(table_name, &cols, out)?;
+    let mut wtr = mk_writer(table_name, cols, out)?;
 
     let mut stmnts = cols
         .iter()
@@ -176,7 +176,7 @@ pub fn write_table_with_progress<'a>(
     Ok(metadata)
 }
 
-fn write_group<'a>(
+fn write_group(
     wtr: &mut impl parquet::file::writer::FileWriter,
     selects: &mut [rusqlite::Rows],
     group_size: usize,
@@ -210,7 +210,7 @@ fn write_group<'a>(
     Ok(())
 }
 
-fn write_col<'a, T>(
+fn write_col<T>(
     iter: &mut rusqlite::Rows,
     group_size: usize,
     wtr: &mut parquet::column::writer::ColumnWriterImpl<T>,

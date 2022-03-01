@@ -26,7 +26,7 @@ impl FromSqlite for i32 {
 impl FromSqlite for i64 {
     fn from_sqlite(x: ValueRef) -> Self {
         match x {
-            ValueRef::Integer(x) => i64::try_from(x).unwrap(),
+            ValueRef::Integer(x) => x,
             ValueRef::Null => unreachable!("Nulls are handled separately"),
             _ => panic!(),
         }
