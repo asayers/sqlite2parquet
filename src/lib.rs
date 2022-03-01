@@ -12,6 +12,20 @@ gets a better compression ratio than xz, and is much faster.  See
 [ARCHIVE](https://github.com/asayers/sqlite2parquet/blob/master/ARCHIVE.md)
 for a comparison.
 
+## The easy way
+
+If you just want to dump the whole table as-is into a parquet file, you can
+use the handy [`infer_schema()`].  It tries to guess the best encoding based
+on the sqlite schema.
+
+```rust
+# let conn = rusqlite::Connection::open_in_memory().unwrap();
+# conn.execute("CREATE TABLE my_table (category TEXT, timestamp DATETIME)", []);
+let cols = sqlite2parquet::infer_schema(&conn, "my_table").unwrap();
+let out_path = std::path::PathBuf::from("my_table.parquet");
+sqlite2parquet::write_table(&conn, "my_table", &cols, &out_path, 1_000_000).unwrap();
+```
+
 ## The flexible way
 
 Explicitly define the columns that will go in the parquet file.  One thing
@@ -19,9 +33,8 @@ to be careful about: the `SELECT` queries must all return the same number
 of rows.  If not, you'll get a runtime error.
 
 ```rust
-let conn = rusqlite::Connection::open_in_memory().unwrap();
-conn.execute("CREATE TABLE my_table (category TEXT, timestamp DATETIME)", []);
-
+# let conn = rusqlite::Connection::open_in_memory().unwrap();
+# conn.execute("CREATE TABLE my_table (category TEXT, timestamp DATETIME)", []);
 use parquet::basic::*;
 use parquet_format::NanoSeconds;
 let cols = vec![
@@ -47,21 +60,6 @@ let cols = vec![
 
 let out_path = std::path::PathBuf::from("category_start_times.parquet");
 sqlite2parquet::write_table(&conn, "category_start_times", &cols, &out_path, 1_000_000).unwrap();
-```
-
-## The easy way
-
-If you just want to dump the whole table as-is into a parquet file, you can
-use the handy [`infer_schema()`].  It tries to guess the best encoding based
-on the sqlite schema.
-
-```rust
-let conn = rusqlite::Connection::open_in_memory().unwrap();
-conn.execute("CREATE TABLE my_table (category TEXT, timestamp DATETIME)", []);
-
-let cols = sqlite2parquet::infer_schema(&conn, "my_table").unwrap();
-let out_path = std::path::PathBuf::from("my_table.parquet");
-sqlite2parquet::write_table(&conn, "my_table", &cols, &out_path, 1_000_000).unwrap();
 ```
 
  */
