@@ -17,6 +17,6 @@ crossterm = "0.23.0"
 fallible-streaming-iterator = "0.1.9"
 parquet = { version = "9.0.2", default-features = false, features = ["zstd"] }
 parquet-format = "4.0.0"
-rusqlite = "0.26.1"
+rusqlite = "0.27.0"
 structopt = "0.3.25"
 thousands = "0.2.0"
