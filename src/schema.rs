@@ -38,19 +38,19 @@ pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<Column>> {
             _ => 0,
         };
         let logical_type = match sql_type.as_str() {
-            "TEXT" | "CHAR" | "VARCHAR" => Some(LogicalType::STRING(StringType::new())),
-            "DATE" => Some(LogicalType::DATE(DateType::new())),
-            "TIME" => Some(LogicalType::TIME(TimeType::new(
-                false,
-                TimeUnit::NANOS(parquet_format::NanoSeconds::new()),
-            ))),
-            "DATETIME" | "TIMESTAMP" => Some(LogicalType::TIMESTAMP(TimestampType::new(
-                true,
-                TimeUnit::NANOS(parquet_format::NanoSeconds::new()),
-            ))),
-            "UUID" => Some(LogicalType::UUID(UUIDType::new())),
-            "JSON" => Some(LogicalType::JSON(JsonType::new())),
-            "BSON" => Some(LogicalType::BSON(BsonType::new())),
+            "TEXT" | "CHAR" | "VARCHAR" => Some(LogicalType::String),
+            "DATE" => Some(LogicalType::Date),
+            "TIME" => Some(LogicalType::Time {
+                is_adjusted_to_u_t_c: false,
+                unit: TimeUnit::NANOS(parquet_format::NanoSeconds::new()),
+            }),
+            "DATETIME" | "TIMESTAMP" => Some(LogicalType::Timestamp {
+                is_adjusted_to_u_t_c: true,
+                unit: TimeUnit::NANOS(parquet_format::NanoSeconds::new()),
+            }),
+            "UUID" => Some(LogicalType::Uuid),
+            "JSON" => Some(LogicalType::Json),
+            "BSON" => Some(LogicalType::Bson),
             _ => None,
         };
         let repetition = if required {
