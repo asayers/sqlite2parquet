@@ -58,10 +58,9 @@ pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<Column>> {
         } else {
             Repetition::OPTIONAL
         };
-        let encoding = match name.as_str() {
-            // TODO: Try to figure out when to do DELTA_BINARY_PACKED and when to leave it as RLE
-            _ => None,
-        };
+        // TODO: Try to figure out when to do DELTA_BINARY_PACKED and when
+        // to leave it as RLE
+        let encoding = None;
         let query = format!("SELECT {} FROM {}", name, table);
         let info = Column {
             name,
@@ -94,7 +93,7 @@ impl fmt::Display for Column {
             "{:20} {} {:20}{}{}{} {}",
             self.name,
             self.repetition,
-            self.physical_type.to_string(),
+            self.physical_type,
             if self.length == 0 {
                 "".to_string()
             } else {
