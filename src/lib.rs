@@ -45,6 +45,7 @@ let cols = vec![
         physical_type: Type::BYTE_ARRAY,
         logical_type: Some(LogicalType::STRING(StringType::new())),
         encoding: None,
+        dictionary: true,
         query: "SELECT category FROM my_table GROUP BY category ORDER BY MIN(timestamp)".to_string(),
     },
     sqlite2parquet::Column {
@@ -54,6 +55,7 @@ let cols = vec![
         physical_type: Type::INT64,
         logical_type: Some(LogicalType::TIMESTAMP(TimestampType::new(true, TimeUnit::NANOS(NanoSeconds::new())))),
         encoding: Some(Encoding::DELTA_BINARY_PACKED),
+        dictionary: false,
         query: "SELECT MIN(timestamp) FROM my_table GROUP BY category ORDER BY MIN(timestamp)".to_string(),
     },
 ];
@@ -91,12 +93,11 @@ fn mk_writer(
     let mut bldr = parquet::file::properties::WriterProperties::builder()
         .set_compression(parquet::basic::Compression::ZSTD);
     for col in cols {
+        let path = parquet::schema::types::ColumnPath::new(vec![col.name.clone()]);
         if let Some(enc) = col.encoding {
-            bldr = bldr.set_column_encoding(
-                parquet::schema::types::ColumnPath::new(vec![col.name.clone()]),
-                enc,
-            )
+            bldr = bldr.set_column_encoding(path.clone(), enc)
         }
+        bldr = bldr.set_column_dictionary_enabled(path, col.dictionary);
     }
     let props = bldr.build();
     Ok(parquet::file::writer::SerializedFileWriter::new(

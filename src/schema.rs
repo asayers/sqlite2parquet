@@ -61,6 +61,10 @@ pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<Column>> {
         // TODO: Try to figure out when to do DELTA_BINARY_PACKED and when
         // to leave it as RLE
         let encoding = None;
+        let dictionary = match sql_type.as_str() {
+            "TEXT" | "CHAR" | "VARCHAR" => true,
+            _ => false,
+        };
         let query = format!("SELECT {} FROM {}", name, table);
         let info = Column {
             name,
@@ -69,6 +73,7 @@ pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<Column>> {
             length,
             repetition,
             encoding,
+            dictionary,
             query,
         };
         infos.push(info);
@@ -83,6 +88,7 @@ pub struct Column {
     pub length: i32,
     pub logical_type: Option<LogicalType>,
     pub encoding: Option<Encoding>,
+    pub dictionary: bool,
     pub query: String,
 }
 
@@ -90,7 +96,7 @@ impl fmt::Display for Column {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{:20} {} {:20}{}{}{} {}",
+            "{:20} {} {:20}{}{}{}{} {}",
             self.name,
             self.repetition,
             self.physical_type,
@@ -109,6 +115,7 @@ impl fmt::Display for Column {
             } else {
                 "".to_string()
             },
+            if self.dictionary { "+dictionary" } else { "" },
             self.query,
         )
     }
