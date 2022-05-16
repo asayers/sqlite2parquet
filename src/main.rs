@@ -1,9 +1,9 @@
 use anyhow::Result;
+use clap::Parser;
 use rusqlite::Connection;
 use sqlite2parquet::*;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use structopt::StructOpt;
 
 /// Extracts data from a sqlite3 DB and writes to parquet files.
 ///
@@ -24,7 +24,7 @@ use structopt::StructOpt;
 /// size with --group-size.  Increasing this number improves the amount of
 /// compression we're able to achieve, but will cause sqlite2parquet to use
 /// more memory.
-#[derive(StructOpt)]
+#[derive(Parser)]
 pub struct Opts {
     /// The sqlite3 database to read from
     pub sqlite: PathBuf,
@@ -41,7 +41,7 @@ pub struct Opts {
 }
 
 fn main() -> anyhow::Result<()> {
-    let opts = Opts::from_args();
+    let opts = Opts::parse();
     let conn = rusqlite::Connection::open(&opts.sqlite)?;
     let mut tables = if opts.table.is_empty() {
         let mut table_info = conn.prepare(
