@@ -76,13 +76,18 @@ fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Re
     })?;
     println!(" {n_rows}");
 
+    println!("Inferring schema for {table}...");
+    let t_start = std::time::Instant::now();
     let cols = sqlite2parquet::infer_schema(conn, table, n_rows)?;
-    println!("{}:", table);
     for col in &cols {
         println!("    {}", col);
     }
 
     let n_cols = cols.len() as u64;
+    println!(
+        "Inferred schema for {n_cols} columns in {:?}",
+        t_start.elapsed()
+    );
 
     let group_size = group_size.max(1);
     println!("Group size: {}", group_size);
