@@ -3,6 +3,15 @@ use parquet::basic::*;
 use rusqlite::Connection;
 use std::fmt;
 
+/// Infer a parquet schema to use for this dataset.
+///
+/// The goal here is to produce the schema which best fits the presented data.
+/// This is a different goal from the sqlite schema, which must allow for
+/// intermediate and future states.  For example: when you first insert rows
+/// into your sqlite database, some of the fields are missing.  Later, you
+/// go over and fill in the missing values.  According the the sqlite schema,
+/// the columns are theoretically nullable; but _in fact_ there are no nulls.
+/// `sqlite2parquet` will infer that these columns are required.
 pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<Column>> {
     let mut infos = vec![];
     let mut table_info = conn.prepare(&format!("SELECT * FROM pragma_table_info('{}')", table))?;
@@ -11,7 +20,24 @@ pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<Column>> {
         let name: String = row.get(1)?;
         let sql_type: String = row.get(2)?;
         let sql_type = sql_type.to_uppercase();
-        let required: bool = row.get(3)?;
+
+        // If the schema says it's "NOT NULL" then we know there are no nulls.
+        // If the schema allows nulls then we should check to see if there
+        // actually are any in the data.
+        let required: bool = row.get(3)?
+            || conn.query_row(
+                &format!("SELECT COUNT(*) FROM {table} WHERE {name} IS NULL"),
+                [],
+                |x| {
+                    let x: i64 = x.get(0)?;
+                    Ok(x == 0)
+                },
+            )?;
+        let repetition = if required {
+            Repetition::REQUIRED
+        } else {
+            Repetition::OPTIONAL
+        };
         let physical_type = match sql_type.as_str() {
             "BOOL" => Type::BOOLEAN,
             "DATE" => Type::INT32,
@@ -53,11 +79,7 @@ pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<Column>> {
             "BSON" => Some(LogicalType::Bson),
             _ => None,
         };
-        let repetition = if required {
-            Repetition::REQUIRED
-        } else {
-            Repetition::OPTIONAL
-        };
+
         // TODO: Try to figure out when to do DELTA_BINARY_PACKED and when
         // to leave it as RLE
         let encoding = None;
