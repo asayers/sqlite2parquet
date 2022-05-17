@@ -220,7 +220,6 @@ where
     T: parquet::data_type::DataType,
     T::T: FromSqlite,
 {
-    let mut reps = vec![];
     let mut defs = vec![];
     let mut vals = vec![];
     for _ in 0..group_size {
@@ -230,15 +229,21 @@ where
         };
         let x = x.get_ref(0)?;
         if x == rusqlite::types::ValueRef::Null {
-            reps.push(0);
+            // This is an OPTIONAL column so the max definition level is 1.
+            // This is less than that, so the value is null.
             defs.push(0);
         } else {
-            reps.push(1);
+            // If the column is OPTIONAL then the max definition level is 1.
+            // This is equal to that, so the value is not null.
+            //
+            // If the column is REQUIRED then the definition levels should
+            // technically all be zeroes, but in that case the levels will
+            // be discarded so it doesn't matter.
             defs.push(1);
             vals.push(T::T::from_sqlite(x));
         }
         iter.advance()?;
     }
-    wtr.write_batch(&vals, Some(&defs), Some(&reps)).unwrap();
+    wtr.write_batch(&vals, Some(&defs), None).unwrap();
     Ok(())
 }
