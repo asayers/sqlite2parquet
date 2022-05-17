@@ -116,7 +116,7 @@ pub struct Column {
     pub required: bool,
     pub physical_type: PhysicalType,
     pub logical_type: Option<LogicalType>,
-    pub encoding: Option<parquet::basic::Encoding>,
+    pub encoding: Option<Encoding>,
     pub dictionary: bool,
     pub query: String,
 }
@@ -131,6 +131,18 @@ pub enum PhysicalType {
     Double,
     ByteArray,
     FixedLenByteArray(i32),
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum Encoding {
+    Plain,
+    Rle,
+    BitPacked,
+    DeltaBinaryPacked,
+    DeltaLengthByteArray,
+    DeltaByteArray,
+    RleDictionary,
+    ByteStreamSplit,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -324,5 +336,18 @@ impl Column {
                 .with_length(length)
                 .build()?,
         )
+    }
+
+    pub fn encoding(&self) -> Option<parquet::basic::Encoding> {
+        Some(match self.encoding? {
+            Encoding::Plain => parquet::basic::Encoding::PLAIN,
+            Encoding::Rle => parquet::basic::Encoding::RLE,
+            Encoding::BitPacked => parquet::basic::Encoding::BIT_PACKED,
+            Encoding::DeltaBinaryPacked => parquet::basic::Encoding::DELTA_BINARY_PACKED,
+            Encoding::DeltaLengthByteArray => parquet::basic::Encoding::DELTA_LENGTH_BYTE_ARRAY,
+            Encoding::DeltaByteArray => parquet::basic::Encoding::DELTA_BYTE_ARRAY,
+            Encoding::RleDictionary => parquet::basic::Encoding::RLE_DICTIONARY,
+            Encoding::ByteStreamSplit => parquet::basic::Encoding::BYTE_STREAM_SPLIT,
+        })
     }
 }

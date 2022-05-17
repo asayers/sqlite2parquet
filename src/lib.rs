@@ -36,7 +36,6 @@ of rows.  If not, you'll get a runtime error.
 # let conn = rusqlite::Connection::open_in_memory().unwrap();
 # conn.execute("CREATE TABLE my_table (category TEXT, timestamp DATETIME)", []);
 use sqlite2parquet::*;
-use parquet::basic::*;
 let cols = vec![
     Column {
         name: "category".to_string(),
@@ -52,7 +51,7 @@ let cols = vec![
         required: true,
         physical_type: PhysicalType::Int64,
         logical_type: Some(LogicalType::Timestamp(TimeType { utc: true, unit: TimeUnit::Nanos })),
-        encoding: Some(Encoding::DELTA_BINARY_PACKED),
+        encoding: Some(Encoding::DeltaBinaryPacked),
         dictionary: false,
         query: "SELECT MIN(timestamp) FROM my_table GROUP BY category ORDER BY MIN(timestamp)".to_string(),
     },
@@ -92,7 +91,7 @@ fn mk_writer(
         .set_compression(parquet::basic::Compression::ZSTD);
     for col in cols {
         let path = parquet::schema::types::ColumnPath::new(vec![col.name.clone()]);
-        if let Some(enc) = col.encoding {
+        if let Some(enc) = col.encoding() {
             bldr = bldr.set_column_encoding(path.clone(), enc)
         }
         bldr = bldr.set_column_dictionary_enabled(path, col.dictionary);
