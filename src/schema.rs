@@ -1,5 +1,4 @@
 use crate::Result;
-use parquet::basic::*;
 use rusqlite::Connection;
 use std::fmt;
 
@@ -67,14 +66,14 @@ pub fn infer_schema(conn: &Connection, table: &str, n_rows: u64) -> Result<Vec<C
         let logical_type = match sql_type.as_str() {
             "TEXT" | "CHAR" | "VARCHAR" => Some(LogicalType::String),
             "DATE" => Some(LogicalType::Date),
-            "TIME" => Some(LogicalType::Time {
-                is_adjusted_to_u_t_c: false,
-                unit: TimeUnit::NANOS(parquet_format::NanoSeconds::new()),
-            }),
-            "DATETIME" | "TIMESTAMP" => Some(LogicalType::Timestamp {
-                is_adjusted_to_u_t_c: true,
-                unit: TimeUnit::NANOS(parquet_format::NanoSeconds::new()),
-            }),
+            "TIME" => Some(LogicalType::Time(TimeType {
+                utc: false,
+                unit: TimeUnit::Nanos,
+            })),
+            "DATETIME" | "TIMESTAMP" => Some(LogicalType::Timestamp(TimeType {
+                utc: true,
+                unit: TimeUnit::Nanos,
+            })),
             "UUID" => Some(LogicalType::Uuid),
             "JSON" => Some(LogicalType::Json),
             "BSON" => Some(LogicalType::Bson),
@@ -117,7 +116,7 @@ pub struct Column {
     pub required: bool,
     pub physical_type: PhysicalType,
     pub logical_type: Option<LogicalType>,
-    pub encoding: Option<Encoding>,
+    pub encoding: Option<parquet::basic::Encoding>,
     pub dictionary: bool,
     pub query: String,
 }
@@ -134,6 +133,39 @@ pub enum PhysicalType {
     FixedLenByteArray(i32),
 }
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum LogicalType {
+    String,
+    Map,
+    List,
+    Enum,
+    Date,
+    Time(TimeType),
+    Timestamp(TimeType),
+    Json,
+    Bson,
+    Uuid,
+    Unknown,
+    Integer { bit_width: i8, is_signed: bool },
+    // Decimal {
+    //     scale: i32,
+    //     precision: i32,
+    // },
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct TimeType {
+    pub utc: bool,
+    pub unit: TimeUnit,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum TimeUnit {
+    Millis,
+    Micros,
+    Nanos,
+}
+
 impl fmt::Display for Column {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
@@ -143,7 +175,7 @@ impl fmt::Display for Column {
             self.required,
             self.physical_type,
             if let Some(x) = &self.logical_type {
-                format!(" ({:?})", x)
+                format!(" ({})", x)
             } else {
                 "".to_string()
             },
@@ -172,6 +204,101 @@ impl fmt::Display for PhysicalType {
     }
 }
 
+impl fmt::Display for LogicalType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            LogicalType::String => f.write_str("String"),
+            LogicalType::Map => f.write_str("Map"),
+            LogicalType::List => f.write_str("List"),
+            LogicalType::Enum => f.write_str("Enum"),
+            LogicalType::Date => f.write_str("Date"),
+            LogicalType::Time(x) => write!(f, "Time ({x})"),
+            LogicalType::Timestamp(x) => write!(f, "Timestamp ({x})"),
+            LogicalType::Json => f.write_str("Json"),
+            LogicalType::Bson => f.write_str("Bson"),
+            LogicalType::Uuid => f.write_str("Uuid"),
+            LogicalType::Unknown => f.write_str("Unknown"),
+            LogicalType::Integer {
+                bit_width,
+                is_signed,
+            } => write!(
+                f,
+                "Integer ({bit_width}-bit, {})",
+                if *is_signed { "signed" } else { "unsigned" }
+            ),
+            // LogicalType::Decimal { scale, precision } => {
+            //     format!("Decimal ({scale}, {precision})")
+            // }
+        }
+    }
+}
+
+impl fmt::Display for TimeType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}, {}",
+            self.unit,
+            if self.utc { "UTC" } else { "local" },
+        )
+    }
+}
+
+impl fmt::Display for TimeUnit {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            TimeUnit::Millis => "ms",
+            TimeUnit::Micros => "μs",
+            TimeUnit::Nanos => "ns",
+        })
+    }
+}
+
+impl LogicalType {
+    fn as_parquet(&self) -> parquet::basic::LogicalType {
+        match *self {
+            LogicalType::String => parquet::basic::LogicalType::String,
+            LogicalType::Map => parquet::basic::LogicalType::Map,
+            LogicalType::List => parquet::basic::LogicalType::List,
+            LogicalType::Enum => parquet::basic::LogicalType::Enum,
+            LogicalType::Date => parquet::basic::LogicalType::Date,
+            LogicalType::Time(x) => parquet::basic::LogicalType::Time {
+                is_adjusted_to_u_t_c: x.utc,
+                unit: x.unit.as_parquet(),
+            },
+            LogicalType::Timestamp(x) => parquet::basic::LogicalType::Timestamp {
+                is_adjusted_to_u_t_c: x.utc,
+                unit: x.unit.as_parquet(),
+            },
+            LogicalType::Json => parquet::basic::LogicalType::Json,
+            LogicalType::Bson => parquet::basic::LogicalType::Bson,
+            LogicalType::Uuid => parquet::basic::LogicalType::Uuid,
+            LogicalType::Unknown => parquet::basic::LogicalType::Unknown,
+            LogicalType::Integer {
+                bit_width,
+                is_signed,
+            } => parquet::basic::LogicalType::Integer {
+                bit_width,
+                is_signed,
+            },
+        }
+    }
+}
+
+impl TimeUnit {
+    fn as_parquet(&self) -> parquet::basic::TimeUnit {
+        match self {
+            TimeUnit::Millis => {
+                parquet::basic::TimeUnit::MILLIS(parquet_format::MilliSeconds::new())
+            }
+            TimeUnit::Micros => {
+                parquet::basic::TimeUnit::MICROS(parquet_format::MicroSeconds::new())
+            }
+            TimeUnit::Nanos => parquet::basic::TimeUnit::NANOS(parquet_format::NanoSeconds::new()),
+        }
+    }
+}
+
 impl Column {
     pub fn as_parquet(&self) -> Result<parquet::schema::types::Type> {
         let repetition = match self.required {
@@ -189,9 +316,10 @@ impl Column {
                 (parquet::basic::Type::FIXED_LEN_BYTE_ARRAY, length)
             }
         };
+        let logical_type = self.logical_type.map(|x| x.as_parquet());
         Ok(
             parquet::schema::types::Type::primitive_type_builder(&self.name, physical_type)
-                .with_logical_type(self.logical_type.clone())
+                .with_logical_type(logical_type)
                 .with_repetition(repetition)
                 .with_length(length)
                 .build()?,

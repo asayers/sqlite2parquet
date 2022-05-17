@@ -37,7 +37,6 @@ of rows.  If not, you'll get a runtime error.
 # conn.execute("CREATE TABLE my_table (category TEXT, timestamp DATETIME)", []);
 use sqlite2parquet::*;
 use parquet::basic::*;
-use parquet_format::NanoSeconds;
 let cols = vec![
     Column {
         name: "category".to_string(),
@@ -52,7 +51,7 @@ let cols = vec![
         name: "first_timestamp".to_string(),
         required: true,
         physical_type: PhysicalType::Int64,
-        logical_type: Some(LogicalType::Timestamp { is_adjusted_to_u_t_c: true, unit: TimeUnit::NANOS(NanoSeconds::new()) }),
+        logical_type: Some(LogicalType::Timestamp(TimeType { utc: true, unit: TimeUnit::Nanos })),
         encoding: Some(Encoding::DELTA_BINARY_PACKED),
         dictionary: false,
         query: "SELECT MIN(timestamp) FROM my_table GROUP BY category ORDER BY MIN(timestamp)".to_string(),
