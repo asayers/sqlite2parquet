@@ -111,6 +111,7 @@ pub fn infer_schema(conn: &Connection, table: &str, n_rows: u64) -> Result<Vec<C
     Ok(infos)
 }
 
+#[derive(Debug, PartialEq, Clone, serde::Deserialize)]
 pub struct Column {
     pub name: String,
     pub required: bool,
@@ -121,7 +122,7 @@ pub struct Column {
     pub query: String,
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, serde::Deserialize)]
 pub enum PhysicalType {
     Boolean,
     Int32,
@@ -133,7 +134,7 @@ pub enum PhysicalType {
     FixedLenByteArray(i32),
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, serde::Deserialize)]
 pub enum Encoding {
     Plain,
     Rle,
@@ -145,7 +146,7 @@ pub enum Encoding {
     ByteStreamSplit,
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, serde::Deserialize)]
 pub enum LogicalType {
     String,
     Map,
@@ -165,13 +166,13 @@ pub enum LogicalType {
     // },
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, serde::Deserialize)]
 pub struct TimeType {
     pub utc: bool,
     pub unit: TimeUnit,
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, serde::Deserialize)]
 pub enum TimeUnit {
     Millis,
     Micros,
