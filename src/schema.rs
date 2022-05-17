@@ -38,6 +38,18 @@ pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<Column>> {
         } else {
             Repetition::OPTIONAL
         };
+
+        let infer_integer = || {
+            let max: i64 =
+                conn.query_row(&format!("SELECT MAX({name}) FROM {table}"), [], |x| {
+                    x.get(0)
+                })?;
+            if max <= i64::from(i32::MAX) {
+                anyhow::Ok(Type::INT32)
+            } else {
+                anyhow::Ok(Type::INT64)
+            }
+        };
         let physical_type = match sql_type.as_str() {
             "BOOL" => Type::BOOLEAN,
             "DATE" => Type::INT32,
@@ -45,9 +57,8 @@ pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<Column>> {
             "DATETIME" | "TIMESTAMP" => Type::INT64,
             "UUID" => Type::FIXED_LEN_BYTE_ARRAY,
             "INTERVAL" => Type::FIXED_LEN_BYTE_ARRAY,
-            "INTEGER" | "BIGINT" | "INT64" => Type::INT64,
-            "INT" | "SMALLINT" | "INT32" => Type::INT32,
-            x if x.starts_with("INT") => Type::INT64, // Fall back to i64 for other integral types
+            "BIGINT" | "SMALLINT" | "NUM" | "NUMBER" => infer_integer()?,
+            x if x.starts_with("INT") => infer_integer()?,
             "TEXT" | "CHAR" | "VARCHAR" => Type::BYTE_ARRAY,
             "BLOB" | "BINARY" | "VARBINARY" => Type::BYTE_ARRAY,
             "JSON" | "BSON" => Type::BYTE_ARRAY,
