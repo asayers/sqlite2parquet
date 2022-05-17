@@ -179,26 +179,35 @@ pub enum TimeUnit {
     Nanos,
 }
 
+pub const COLUMN_HEADER: &'static str =
+    "Column                 Physical type   Encoding             Logical type               SQL";
+
 impl fmt::Display for Column {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let required = if self.required { "*" } else { "?" };
+        let physical_type = self.physical_type.to_string();
+        let encoding = format!(
+            "{}{}",
+            if let Some(x) = &self.encoding {
+                format!("{:?}", x)
+            } else {
+                "default".to_string()
+            },
+            if self.dictionary { " + dict" } else { "" },
+        );
+        let logical_type = match self.logical_type {
+            Some(x) => x.to_string(),
+            None => match self.physical_type {
+                PhysicalType::Boolean => "Boolean".into(),
+                PhysicalType::Int32 | PhysicalType::Int64 => "Integer".into(),
+                PhysicalType::Float | PhysicalType::Double => "Float".into(),
+                PhysicalType::ByteArray | PhysicalType::FixedLenByteArray(_) => "Blob".into(),
+            },
+        };
         write!(
             f,
-            "{:20} {:5} {:20}{}{}{} {}",
-            self.name,
-            self.required,
-            self.physical_type,
-            if let Some(x) = &self.logical_type {
-                format!(" ({})", x)
-            } else {
-                "".to_string()
-            },
-            if let Some(x) = &self.encoding {
-                format!(" ({:?})", x)
-            } else {
-                "".to_string()
-            },
-            if self.dictionary { "+dictionary" } else { "" },
-            self.query,
+            "{:20} {required} {physical_type:15} {encoding:20} {logical_type:26} \"{};\"",
+            self.name, self.query,
         )
     }
 }

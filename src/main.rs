@@ -107,6 +107,7 @@ fn mk_table(
         println!("Inferred schema in {:?}", t_start.elapsed());
         cols
     };
+    println!("    {}", COLUMN_HEADER);
     for col in &cols {
         println!("    {}", col);
     }
