@@ -107,7 +107,7 @@ pub fn infer_schema(conn: &Connection, table: &str, n_rows: u64) -> Result<Vec<C
         )?;
         let dictionary = n_sample / n_unique >= 2;
 
-        let query = format!("SELECT {} FROM {}", name, table);
+        let query = format!("SELECT {} FROM {} ORDER BY rowid", name, table);
         let info = Column {
             name,
             physical_type,
