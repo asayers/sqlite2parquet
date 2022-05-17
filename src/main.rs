@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::Parser;
 use rusqlite::Connection;
 use sqlite2parquet::*;
+use std::collections::HashMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -30,6 +31,8 @@ pub struct Opts {
     pub sqlite: PathBuf,
     /// The directory to put parquet files in
     pub out_dir: PathBuf,
+    #[structopt(long)]
+    pub config: Option<PathBuf>,
     /// The table(s) to extract
     #[structopt(long, short)]
     pub table: Vec<String>,
@@ -42,8 +45,20 @@ pub struct Opts {
 
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
+
+    let mut config: HashMap<String, Vec<Column>> = if let Some(path) = opts.config {
+        serde_yaml::from_reader(std::fs::File::open(path)?)?
+    } else {
+        HashMap::default()
+    };
+
     let conn = rusqlite::Connection::open(&opts.sqlite)?;
-    let mut tables = if opts.table.is_empty() {
+
+    let mut tables: Vec<String> = if !opts.table.is_empty() {
+        opts.table
+    } else if !config.is_empty() {
+        config.keys().cloned().collect()
+    } else {
         let mut table_info = conn.prepare(
             "SELECT name
             FROM sqlite_schema
@@ -52,23 +67,30 @@ fn main() -> anyhow::Result<()> {
         )?;
         let x = table_info
             .query_map([], |row| row.get::<_, String>(0))?
-            .collect::<rusqlite::Result<Vec<String>>>()?;
+            .collect::<rusqlite::Result<_>>()?;
         x
-    } else {
-        opts.table
     };
     if opts.include_schema {
         tables.push("sqlite_schema".to_string());
     }
+
     std::fs::create_dir_all(&opts.out_dir)?;
     for table in tables {
-        let out = opts.out_dir.join(format!("{}.parquet", table));
-        mk_table(&conn, &table, &out, opts.group_size)?;
+        let out = opts.out_dir.join(format!("{}.parquet", &table));
+        let config = config.remove(&table);
+        mk_table(&conn, &table, &out, config, opts.group_size)?;
     }
     Ok(())
 }
 
-fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Result<()> {
+fn mk_table(
+    conn: &Connection,
+    table: &str,
+    out: &Path,
+    // Infer if `None`
+    config: Option<Vec<Column>>,
+    group_size: usize,
+) -> Result<()> {
     print!("Counting rows...");
     std::io::stdout().flush()?;
     let n_rows: u64 = conn.query_row(&format!("SELECT COUNT(1) FROM {}", table), [], |row| {
@@ -76,18 +98,19 @@ fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Re
     })?;
     println!(" {n_rows}");
 
-    println!("Inferring schema for {table}...");
-    let t_start = std::time::Instant::now();
-    let cols = sqlite2parquet::infer_schema(conn, table, n_rows)?;
+    let cols: Vec<Column> = if let Some(cols) = config {
+        cols
+    } else {
+        println!("Inferring schema for {table}...");
+        let t_start = std::time::Instant::now();
+        let cols = sqlite2parquet::infer_schema(conn, table, n_rows)?;
+        println!("Inferred schema in {:?}", t_start.elapsed());
+        cols
+    };
     for col in &cols {
         println!("    {}", col);
     }
-
     let n_cols = cols.len() as u64;
-    println!(
-        "Inferred schema for {n_cols} columns in {:?}",
-        t_start.elapsed()
-    );
 
     let group_size = group_size.max(1);
     println!("Group size: {}", group_size);

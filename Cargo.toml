@@ -20,8 +20,9 @@ parquet = { version = "13.0.0", default-features = false, features = ["zstd"] }
 parquet-format = "4.0.0"
 rusqlite = "0.27.0"
 serde = { version = "1.0.137", features = ["derive"] }
+serde_yaml = { version = "0.8.24", optional = true }
 thousands = { version = "0.2.0", optional = true }
 
 [features]
-cli = ["clap", "crossterm", "thousands"]
+cli = ["clap", "crossterm", "serde_yaml", "thousands"]
 default = ["cli"]
