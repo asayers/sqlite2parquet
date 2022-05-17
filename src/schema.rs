@@ -12,7 +12,7 @@ use std::fmt;
 /// go over and fill in the missing values.  According the the sqlite schema,
 /// the columns are theoretically nullable; but _in fact_ there are no nulls.
 /// `sqlite2parquet` will infer that these columns are required.
-pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<Column>> {
+pub fn infer_schema(conn: &Connection, table: &str, n_rows: u64) -> Result<Vec<Column>> {
     let mut infos = vec![];
     let mut table_info = conn.prepare(&format!("SELECT * FROM pragma_table_info('{}')", table))?;
     let mut iter = table_info.query([])?;
@@ -94,10 +94,19 @@ pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<Column>> {
         // TODO: Try to figure out when to do DELTA_BINARY_PACKED and when
         // to leave it as RLE
         let encoding = None;
-        let dictionary = match sql_type.as_str() {
-            "TEXT" | "CHAR" | "VARCHAR" => true,
-            _ => false,
-        };
+
+        // Sample 1000 rows randomly and check how many of them are unique
+        let n_sample = 1000.min(n_rows);
+        let n_unique: u64 = conn.query_row(
+            &format!(
+                "SELECT COUNT(DISTINCT {name}) FROM \
+                    (SELECT {name} FROM {table} ORDER BY RANDOM() LIMIT 1000)"
+            ),
+            [],
+            |x| x.get(0),
+        )?;
+        let dictionary = n_sample / n_unique >= 2;
+
         let query = format!("SELECT {} FROM {}", name, table);
         let info = Column {
             name,

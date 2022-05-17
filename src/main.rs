@@ -69,20 +69,20 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn mk_table(conn: &Connection, table: &str, out: &Path, group_size: usize) -> Result<()> {
-    let cols = sqlite2parquet::infer_schema(conn, table)?;
+    print!("Counting rows...");
+    std::io::stdout().flush()?;
+    let n_rows: u64 = conn.query_row(&format!("SELECT COUNT(1) FROM {}", table), [], |row| {
+        row.get(0)
+    })?;
+    println!(" {n_rows}");
+
+    let cols = sqlite2parquet::infer_schema(conn, table, n_rows)?;
     println!("{}:", table);
     for col in &cols {
         println!("    {}", col);
     }
 
     let n_cols = cols.len() as u64;
-
-    print!("Counting rows...");
-    std::io::stdout().flush()?;
-    let n_rows: u64 = conn.query_row(&format!("SELECT COUNT(1) FROM {}", table), [], |row| {
-        row.get(0)
-    })?;
-    println!(" {}", n_rows);
 
     let group_size = group_size.max(1);
     println!("Group size: {}", group_size);
