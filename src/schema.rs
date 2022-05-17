@@ -33,11 +33,6 @@ pub fn infer_schema(conn: &Connection, table: &str, n_rows: u64) -> Result<Vec<C
                     Ok(x == 0)
                 },
             )?;
-        let repetition = if required {
-            Repetition::REQUIRED
-        } else {
-            Repetition::OPTIONAL
-        };
 
         let infer_integer = || {
             let max: i64 =
@@ -113,7 +108,7 @@ pub fn infer_schema(conn: &Connection, table: &str, n_rows: u64) -> Result<Vec<C
             physical_type,
             logical_type,
             length,
-            repetition,
+            required,
             encoding,
             dictionary,
             query,
@@ -125,7 +120,7 @@ pub fn infer_schema(conn: &Connection, table: &str, n_rows: u64) -> Result<Vec<C
 
 pub struct Column {
     pub name: String,
-    pub repetition: Repetition,
+    pub required: bool,
     pub physical_type: Type,
     pub length: i32,
     pub logical_type: Option<LogicalType>,
@@ -138,9 +133,9 @@ impl fmt::Display for Column {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{:20} {} {:20}{}{}{}{} {}",
+            "{:20} {:5} {:20}{}{}{}{} {}",
             self.name,
-            self.repetition,
+            self.required,
             self.physical_type,
             if self.length == 0 {
                 "".to_string()
@@ -165,10 +160,14 @@ impl fmt::Display for Column {
 
 impl Column {
     pub fn as_parquet(&self) -> Result<parquet::schema::types::Type> {
+        let repetition = match self.required {
+            true => parquet::basic::Repetition::REQUIRED,
+            false => parquet::basic::Repetition::OPTIONAL,
+        };
         Ok(
             parquet::schema::types::Type::primitive_type_builder(&self.name, self.physical_type)
                 .with_logical_type(self.logical_type.clone())
-                .with_repetition(self.repetition)
+                .with_repetition(repetition)
                 .with_length(self.length)
                 .build()?,
         )

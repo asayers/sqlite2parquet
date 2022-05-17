@@ -40,7 +40,7 @@ use parquet_format::NanoSeconds;
 let cols = vec![
     sqlite2parquet::Column {
         name: "category".to_string(),
-        repetition: Repetition::REQUIRED,
+        required: true,
         length: 0,
         physical_type: Type::BYTE_ARRAY,
         logical_type: Some(LogicalType::String),
@@ -50,7 +50,7 @@ let cols = vec![
     },
     sqlite2parquet::Column {
         name: "first_timestamp".to_string(),
-        repetition: Repetition::REQUIRED,
+        required: true,
         length: 0,
         physical_type: Type::INT64,
         logical_type: Some(LogicalType::Timestamp { is_adjusted_to_u_t_c: true, unit: TimeUnit::NANOS(NanoSeconds::new()) }),
