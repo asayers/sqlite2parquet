@@ -40,34 +40,29 @@ pub fn infer_schema(conn: &Connection, table: &str, n_rows: u64) -> Result<Vec<C
                     x.get(0)
                 })?;
             if max <= i64::from(i32::MAX) {
-                anyhow::Ok(Type::INT32)
+                anyhow::Ok(PhysicalType::Int32)
             } else {
-                anyhow::Ok(Type::INT64)
+                anyhow::Ok(PhysicalType::Int64)
             }
         };
         let physical_type = match sql_type.as_str() {
-            "BOOL" => Type::BOOLEAN,
-            "DATE" => Type::INT32,
-            "TIME" => Type::INT64,
-            "DATETIME" | "TIMESTAMP" => Type::INT64,
-            "UUID" => Type::FIXED_LEN_BYTE_ARRAY,
-            "INTERVAL" => Type::FIXED_LEN_BYTE_ARRAY,
+            "BOOL" => PhysicalType::Boolean,
+            "DATE" => PhysicalType::Int32,
+            "TIME" => PhysicalType::Int64,
+            "DATETIME" | "TIMESTAMP" => PhysicalType::Int64,
+            "UUID" => PhysicalType::FixedLenByteArray(16),
+            "INTERVAL" => PhysicalType::FixedLenByteArray(12),
             "BIGINT" | "SMALLINT" | "NUM" | "NUMBER" => infer_integer()?,
             x if x.starts_with("INT") => infer_integer()?,
-            "TEXT" | "CHAR" | "VARCHAR" => Type::BYTE_ARRAY,
-            "BLOB" | "BINARY" | "VARBINARY" => Type::BYTE_ARRAY,
-            "JSON" | "BSON" => Type::BYTE_ARRAY,
-            "FLOAT" => Type::FLOAT,
-            "REAL" | "DOUBLE" => Type::DOUBLE,
+            "TEXT" | "CHAR" | "VARCHAR" => PhysicalType::ByteArray,
+            "BLOB" | "BINARY" | "VARBINARY" => PhysicalType::ByteArray,
+            "JSON" | "BSON" => PhysicalType::ByteArray,
+            "FLOAT" => PhysicalType::Float,
+            "REAL" | "DOUBLE" => PhysicalType::Double,
             x => {
                 eprintln!("Unknown type: {}", x);
-                Type::BYTE_ARRAY
+                PhysicalType::ByteArray
             }
-        };
-        let length = match sql_type.as_str() {
-            "UUID" => 16,
-            "INTERVAL" => 12,
-            _ => 0,
         };
         let logical_type = match sql_type.as_str() {
             "TEXT" | "CHAR" | "VARCHAR" => Some(LogicalType::String),
@@ -107,7 +102,6 @@ pub fn infer_schema(conn: &Connection, table: &str, n_rows: u64) -> Result<Vec<C
             name,
             physical_type,
             logical_type,
-            length,
             required,
             encoding,
             dictionary,
@@ -121,27 +115,33 @@ pub fn infer_schema(conn: &Connection, table: &str, n_rows: u64) -> Result<Vec<C
 pub struct Column {
     pub name: String,
     pub required: bool,
-    pub physical_type: Type,
-    pub length: i32,
+    pub physical_type: PhysicalType,
     pub logical_type: Option<LogicalType>,
     pub encoding: Option<Encoding>,
     pub dictionary: bool,
     pub query: String,
 }
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum PhysicalType {
+    Boolean,
+    Int32,
+    Int64,
+    // We don't use Int96
+    Float,
+    Double,
+    ByteArray,
+    FixedLenByteArray(i32),
+}
+
 impl fmt::Display for Column {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{:20} {:5} {:20}{}{}{}{} {}",
+            "{:20} {:5} {:20}{}{}{} {}",
             self.name,
             self.required,
             self.physical_type,
-            if self.length == 0 {
-                "".to_string()
-            } else {
-                format!("[{}]", self.length)
-            },
             if let Some(x) = &self.logical_type {
                 format!(" ({:?})", x)
             } else {
@@ -158,17 +158,42 @@ impl fmt::Display for Column {
     }
 }
 
+impl fmt::Display for PhysicalType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            PhysicalType::Boolean => write!(f, "Boolean"),
+            PhysicalType::Int32 => write!(f, "Int32"),
+            PhysicalType::Int64 => write!(f, "Int64"),
+            PhysicalType::Float => write!(f, "Float"),
+            PhysicalType::Double => write!(f, "Double"),
+            PhysicalType::ByteArray => write!(f, "ByteArray"),
+            PhysicalType::FixedLenByteArray(length) => write!(f, "ByteArray[{length}]"),
+        }
+    }
+}
+
 impl Column {
     pub fn as_parquet(&self) -> Result<parquet::schema::types::Type> {
         let repetition = match self.required {
             true => parquet::basic::Repetition::REQUIRED,
             false => parquet::basic::Repetition::OPTIONAL,
         };
+        let (physical_type, length) = match self.physical_type {
+            PhysicalType::Boolean => (parquet::basic::Type::BOOLEAN, 0),
+            PhysicalType::Int32 => (parquet::basic::Type::INT32, 0),
+            PhysicalType::Int64 => (parquet::basic::Type::INT64, 0),
+            PhysicalType::Float => (parquet::basic::Type::FLOAT, 0),
+            PhysicalType::Double => (parquet::basic::Type::DOUBLE, 0),
+            PhysicalType::ByteArray => (parquet::basic::Type::BYTE_ARRAY, 0),
+            PhysicalType::FixedLenByteArray(length) => {
+                (parquet::basic::Type::FIXED_LEN_BYTE_ARRAY, length)
+            }
+        };
         Ok(
-            parquet::schema::types::Type::primitive_type_builder(&self.name, self.physical_type)
+            parquet::schema::types::Type::primitive_type_builder(&self.name, physical_type)
                 .with_logical_type(self.logical_type.clone())
                 .with_repetition(repetition)
-                .with_length(self.length)
+                .with_length(length)
                 .build()?,
         )
     }

@@ -35,24 +35,23 @@ of rows.  If not, you'll get a runtime error.
 ```rust
 # let conn = rusqlite::Connection::open_in_memory().unwrap();
 # conn.execute("CREATE TABLE my_table (category TEXT, timestamp DATETIME)", []);
+use sqlite2parquet::*;
 use parquet::basic::*;
 use parquet_format::NanoSeconds;
 let cols = vec![
-    sqlite2parquet::Column {
+    Column {
         name: "category".to_string(),
         required: true,
-        length: 0,
-        physical_type: Type::BYTE_ARRAY,
+        physical_type: PhysicalType::ByteArray,
         logical_type: Some(LogicalType::String),
         encoding: None,
         dictionary: true,
         query: "SELECT category FROM my_table GROUP BY category ORDER BY MIN(timestamp)".to_string(),
     },
-    sqlite2parquet::Column {
+    Column {
         name: "first_timestamp".to_string(),
         required: true,
-        length: 0,
-        physical_type: Type::INT64,
+        physical_type: PhysicalType::Int64,
         logical_type: Some(LogicalType::Timestamp { is_adjusted_to_u_t_c: true, unit: TimeUnit::NANOS(NanoSeconds::new()) }),
         encoding: Some(Encoding::DELTA_BINARY_PACKED),
         dictionary: false,
@@ -61,7 +60,7 @@ let cols = vec![
 ];
 
 let out_path = std::path::PathBuf::from("category_start_times.parquet");
-sqlite2parquet::write_table(&conn, "category_start_times", &cols, &out_path, 1_000_000).unwrap();
+write_table(&conn, "category_start_times", &cols, &out_path, 1_000_000).unwrap();
 ```
 
  */
