@@ -37,12 +37,12 @@ pub fn infer_schema<'a>(
             )?;
 
         let infer_integer = || {
-            let (min, max): (i64, i64) = conn.query_row(
+            let (min, max): (Option<i64>, Option<i64>) = conn.query_row(
                 &format!("SELECT MIN({name}), MAX({name}) FROM {table}"),
                 [],
                 |x| Ok((x.get(0)?, x.get(1)?)),
             )?;
-            if max <= i64::from(i32::MAX) && min >= i64::from(i32::MIN) {
+            if max.unwrap_or(0) <= i64::from(i32::MAX) && min.unwrap_or(0) >= i64::from(i32::MIN) {
                 anyhow::Ok(PhysicalType::Int32)
             } else {
                 anyhow::Ok(PhysicalType::Int64)
@@ -89,7 +89,7 @@ pub fn infer_schema<'a>(
         let encoding = None;
 
         // Sample 1000 rows randomly and check how many of them are unique
-        let prop_unique: f64 = conn.query_row(
+        let prop_unique: Option<f64> = conn.query_row(
             &format!(
                 "SELECT CAST(COUNT(DISTINCT {name}) as REAL) / COUNT(*) FROM \
                     (SELECT {name} FROM {table} ORDER BY RANDOM() LIMIT 1000)"
@@ -97,7 +97,7 @@ pub fn infer_schema<'a>(
             [],
             |x| x.get(0),
         )?;
-        let dictionary = prop_unique < 0.75;
+        let dictionary = prop_unique.map_or(false, |x| x < 0.75);
 
         let query = format!("SELECT {} FROM {} ORDER BY rowid", name, table);
         Ok(Column {
