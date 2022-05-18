@@ -37,11 +37,12 @@ pub fn infer_schema<'a>(
             )?;
 
         let infer_integer = || {
-            let max: i64 =
-                conn.query_row(&format!("SELECT MAX({name}) FROM {table}"), [], |x| {
-                    x.get(0)
-                })?;
-            if max <= i64::from(i32::MAX) {
+            let (min, max): (i64, i64) = conn.query_row(
+                &format!("SELECT MIN({name}), MAX({name}) FROM {table}"),
+                [],
+                |x| Ok((x.get(0)?, x.get(1)?)),
+            )?;
+            if max <= i64::from(i32::MAX) && min >= i64::from(i32::MIN) {
                 anyhow::Ok(PhysicalType::Int32)
             } else {
                 anyhow::Ok(PhysicalType::Int64)
