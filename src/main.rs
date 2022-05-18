@@ -139,7 +139,7 @@ fn mk_table(
     print_progress(
         n_cols,
         n_cols,
-        n_rows,
+        u64::try_from(metadata.num_rows).unwrap(),
         n_rows,
         metadata.row_groups.len() as u64,
         group_size,
@@ -173,12 +173,12 @@ fn print_progress(
         .queue(style::Print(format_args!(
             "[{:.2}%] Wrote {}{} rows as {} group{} in {:.1?}{}",
             pc,
+            n_rows_written,
             if finished {
                 "".to_string()
             } else {
-                format!("{} of ", n_rows_written)
+                format!(" of {} ", n_rows)
             },
-            n_rows,
             n_groups,
             if n_groups == 1 { "" } else { "s" },
             time,
