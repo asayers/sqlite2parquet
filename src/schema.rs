@@ -11,19 +11,25 @@ use std::fmt;
 /// go over and fill in the missing values.  According the the sqlite schema,
 /// the columns are theoretically nullable; but _in fact_ there are no nulls.
 /// `sqlite2parquet` will infer that these columns are required.
-pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<Column>> {
-    let mut infos = vec![];
+pub fn infer_schema<'a>(
+    conn: &'a Connection,
+    table: &'a str,
+) -> Result<impl Iterator<Item = Result<Column>> + 'a> {
     let mut table_info = conn.prepare(&format!("SELECT * FROM pragma_table_info('{}')", table))?;
-    let mut iter = table_info.query([])?;
-    while let Some(row) = iter.next()? {
-        let name: String = row.get(1)?;
-        let sql_type: String = row.get(2)?;
-        let sql_type = sql_type.to_uppercase();
-
+    let infos: rusqlite::Result<Vec<(String, String, bool)>> = table_info
+        .query_map([], |row| {
+            let name: String = row.get(1)?;
+            let sql_type: String = row.get(2)?;
+            let sql_type = sql_type.to_uppercase();
+            let not_null: bool = row.get(3)?;
+            Ok((name, sql_type, not_null))
+        })?
+        .collect();
+    Ok(infos?.into_iter().map(move |(name, sql_type, not_null)| {
         // If the schema says it's "NOT NULL" then we know there are no nulls.
         // If the schema allows nulls then we should check to see if there
         // actually are any in the data.
-        let required: bool = row.get(3)?
+        let required: bool = not_null
             || conn.query_row(
                 &format!("SELECT COUNT(*) == 0 FROM {table} WHERE {name} IS NULL"),
                 [],
@@ -93,7 +99,7 @@ pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<Column>> {
         let dictionary = prop_unique < 0.75;
 
         let query = format!("SELECT {} FROM {} ORDER BY rowid", name, table);
-        let info = Column {
+        Ok(Column {
             name,
             physical_type,
             logical_type,
@@ -101,10 +107,8 @@ pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<Column>> {
             encoding,
             dictionary,
             query,
-        };
-        infos.push(info);
-    }
-    Ok(infos)
+        })
+    }))
 }
 
 #[derive(Debug, PartialEq, Clone, serde::Deserialize)]

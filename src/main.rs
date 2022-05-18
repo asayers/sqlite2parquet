@@ -111,7 +111,7 @@ fn mk_table(
     } else {
         println!("Inferring schema for {table}...");
         let t_start = std::time::Instant::now();
-        let cols = sqlite2parquet::infer_schema(conn, table)?;
+        let cols = sqlite2parquet::infer_schema(conn, table)?.collect::<Result<Vec<_>>>()?;
         println!("Inferred schema in {:?}", t_start.elapsed());
         cols
     };

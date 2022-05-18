@@ -21,7 +21,10 @@ on the sqlite schema.
 ```rust
 # let conn = rusqlite::Connection::open_in_memory().unwrap();
 # conn.execute("CREATE TABLE my_table (category TEXT, timestamp DATETIME)", []);
-let cols = sqlite2parquet::infer_schema(&conn, "my_table").unwrap();
+let cols = sqlite2parquet::infer_schema(&conn, "my_table")
+    .unwrap()
+    .collect::<anyhow::Result<Vec<_>>>()
+    .unwrap();
 let out_path = std::path::PathBuf::from("my_table.parquet");
 sqlite2parquet::write_table(&conn, "my_table", &cols, &out_path, 1_000_000).unwrap();
 ```
