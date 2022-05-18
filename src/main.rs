@@ -93,9 +93,17 @@ fn mk_table(
 ) -> Result<()> {
     print!("Counting rows...");
     std::io::stdout().flush()?;
-    let n_rows: u64 = conn.query_row(&format!("SELECT COUNT(1) FROM {}", table), [], |row| {
-        row.get(0)
-    })?;
+    let n_rows: u64 = if let Some(config) = config.as_ref() {
+        conn.query_row(
+            &format!("SELECT COUNT(1) FROM ({})", config[0].query),
+            [],
+            |row| row.get(0),
+        )?
+    } else {
+        conn.query_row(&format!("SELECT COUNT(1) FROM {}", table), [], |row| {
+            row.get(0)
+        })?
+    };
     println!(" {n_rows}");
 
     let cols: Vec<Column> = if let Some(cols) = config {
