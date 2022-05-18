@@ -25,12 +25,9 @@ pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<Column>> {
         // actually are any in the data.
         let required: bool = row.get(3)?
             || conn.query_row(
-                &format!("SELECT COUNT(*) FROM {table} WHERE {name} IS NULL"),
+                &format!("SELECT COUNT(*) == 0 FROM {table} WHERE {name} IS NULL"),
                 [],
-                |x| {
-                    let x: i64 = x.get(0)?;
-                    Ok(x == 0)
-                },
+                |x| x.get(0),
             )?;
 
         let infer_integer = || {
