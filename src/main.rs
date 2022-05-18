@@ -107,18 +107,25 @@ fn mk_table(
     println!(" {n_rows}");
 
     let cols: Vec<Column> = if let Some(cols) = config {
+        println!("    {}", COLUMN_HEADER);
+        for col in &cols {
+            println!("    {}", col);
+        }
         cols
     } else {
         println!("Inferring schema for {table}...");
+        println!("    {}", COLUMN_HEADER);
         let t_start = std::time::Instant::now();
-        let cols = sqlite2parquet::infer_schema(conn, table)?.collect::<Result<Vec<_>>>()?;
+        let cols = sqlite2parquet::infer_schema(conn, table)?
+            .inspect(|col| {
+                if let Ok(col) = col {
+                    println!("    {}", col)
+                }
+            })
+            .collect::<Result<Vec<_>>>()?;
         println!("Inferred schema in {:?}", t_start.elapsed());
         cols
     };
-    println!("    {}", COLUMN_HEADER);
-    for col in &cols {
-        println!("    {}", col);
-    }
     let n_cols = cols.len() as u64;
 
     let group_size = group_size.max(1);
