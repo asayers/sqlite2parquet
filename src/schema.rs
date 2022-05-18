@@ -11,7 +11,7 @@ use std::fmt;
 /// go over and fill in the missing values.  According the the sqlite schema,
 /// the columns are theoretically nullable; but _in fact_ there are no nulls.
 /// `sqlite2parquet` will infer that these columns are required.
-pub fn infer_schema(conn: &Connection, table: &str, n_rows: u64) -> Result<Vec<Column>> {
+pub fn infer_schema(conn: &Connection, table: &str) -> Result<Vec<Column>> {
     let mut infos = vec![];
     let mut table_info = conn.prepare(&format!("SELECT * FROM pragma_table_info('{}')", table))?;
     let mut iter = table_info.query([])?;
@@ -85,16 +85,15 @@ pub fn infer_schema(conn: &Connection, table: &str, n_rows: u64) -> Result<Vec<C
         let encoding = None;
 
         // Sample 1000 rows randomly and check how many of them are unique
-        let n_sample = 1000.min(n_rows);
-        let n_unique: u64 = conn.query_row(
+        let prop_unique: f64 = conn.query_row(
             &format!(
-                "SELECT COUNT(DISTINCT {name}) FROM \
+                "SELECT CAST(COUNT(DISTINCT {name}) as REAL) / COUNT(*) FROM \
                     (SELECT {name} FROM {table} ORDER BY RANDOM() LIMIT 1000)"
             ),
             [],
             |x| x.get(0),
         )?;
-        let dictionary = n_sample / n_unique >= 2;
+        let dictionary = prop_unique < 0.75;
 
         let query = format!("SELECT {} FROM {} ORDER BY rowid", name, table);
         let info = Column {
