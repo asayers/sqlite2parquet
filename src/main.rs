@@ -83,6 +83,9 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+const COLUMN_HEADER: &'static str =
+    "Column                 Physical type   Encoding             Logical type               SQL";
+
 fn mk_table(
     conn: &Connection,
     table: &str,

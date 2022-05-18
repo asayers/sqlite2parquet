@@ -180,9 +180,6 @@ pub enum TimeUnit {
     Nanos,
 }
 
-pub const COLUMN_HEADER: &'static str =
-    "Column                 Physical type   Encoding             Logical type               SQL";
-
 impl fmt::Display for Column {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let required = if self.required { "*" } else { "?" };
@@ -323,7 +320,7 @@ impl TimeUnit {
 }
 
 impl Column {
-    pub fn as_parquet(&self) -> Result<parquet::schema::types::Type> {
+    pub(crate) fn as_parquet(&self) -> Result<parquet::schema::types::Type> {
         let repetition = match self.required {
             true => parquet::basic::Repetition::REQUIRED,
             false => parquet::basic::Repetition::OPTIONAL,
@@ -349,7 +346,7 @@ impl Column {
         )
     }
 
-    pub fn encoding(&self) -> Option<parquet::basic::Encoding> {
+    pub(crate) fn encoding(&self) -> Option<parquet::basic::Encoding> {
         Some(match self.encoding? {
             Encoding::Plain => parquet::basic::Encoding::PLAIN,
             Encoding::Rle => parquet::basic::Encoding::RLE,
