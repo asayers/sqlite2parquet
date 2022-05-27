@@ -127,18 +127,21 @@ pub fn write_table(
     out: &Path,
     group_size: usize,
 ) -> Result<parquet_format::FileMetaData> {
-    let cb = |_, _, _| Ok(());
-    write_table_with_progress(conn, table_name, cols, out, group_size, cb)
+    write_table_with_progress(conn, table_name, cols, out, group_size, |_| Ok(()))
+}
+
+#[derive(Default, Debug, Copy, Clone)]
+pub struct Progress {
+    /// Number of columns written within the current (incomplete) row group
+    pub n_cols: u64,
+    /// Number of rows fully written
+    pub n_rows: u64,
+    /// Number of row groups fully written
+    pub n_groups: u64,
 }
 
 /// Like [`write_table()`], but lets you provide a callback which is called
 /// regularly.
-///
-/// The arguments of the callback are:
-///
-/// * Number of columns written within the current (incomplete) row group
-/// * Number of rows fully written
-/// * Number of row groups fully written
 ///
 /// For more information, see the docs for [`write_table()`].
 pub fn write_table_with_progress(
@@ -147,7 +150,7 @@ pub fn write_table_with_progress(
     cols: &[Column],
     out: &Path,
     group_size: usize,
-    mut progress_cb: impl FnMut(u64, u64, u64) -> Result<()>,
+    mut progress_cb: impl FnMut(Progress) -> Result<()>,
 ) -> Result<parquet_format::FileMetaData> {
     let mut wtr = mk_writer(table_name, cols, out)?;
 
@@ -163,15 +166,14 @@ pub fn write_table_with_progress(
         s.advance()?;
     }
 
-    let mut n_rows_written = 0;
-    let mut n_groups_written = 0;
+    let mut progress = Progress::default();
     while selects[0].get().is_some() {
-        write_group(&mut wtr, &mut selects, group_size, |n_cols_written| {
-            progress_cb(n_cols_written, n_rows_written, n_groups_written)
+        write_group(&mut wtr, &mut selects, group_size, |n_cols| {
+            progress_cb(Progress { n_cols, ..progress })
         })
-        .context(format!("Group {}", n_groups_written))?;
-        n_rows_written += group_size as u64;
-        n_groups_written += 1;
+        .context(format!("Group {}", progress.n_groups))?;
+        progress.n_rows += group_size as u64;
+        progress.n_groups += 1;
     }
     let metadata = wtr.close()?;
     Ok(metadata)

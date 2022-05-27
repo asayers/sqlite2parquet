@@ -129,7 +129,12 @@ fn mk_table(
         println!("Inferred schema in {:?}", t_start.elapsed());
         cols
     };
-    let n_cols = cols.len() as u64;
+
+    let total = Progress {
+        n_cols: cols.len() as u64,
+        n_rows,
+        n_groups: (n_rows + group_size as u64 - 1) / group_size as u64,
+    };
 
     let group_size = group_size.max(1);
     println!("Group size: {}", group_size);
@@ -141,40 +146,22 @@ fn mk_table(
         &cols,
         out,
         group_size,
-        |n_cols_written, n_rows_written, n_groups_written| {
-            print_progress(
-                n_cols_written,
-                n_cols,
-                n_rows_written,
-                n_rows,
-                n_groups_written,
-                group_size,
-                t_start.elapsed(),
-                false,
-            )
-        },
+        |written| print_progress(written, total, group_size, t_start.elapsed(), false),
     )?;
-    print_progress(
-        n_cols,
-        n_cols,
-        u64::try_from(metadata.num_rows).unwrap(),
-        n_rows,
-        metadata.row_groups.len() as u64,
-        group_size,
-        t_start.elapsed(),
-        true,
-    )?;
+    let final_prog = Progress {
+        n_cols: total.n_cols,
+        n_rows: metadata.num_rows as u64,
+        n_groups: metadata.row_groups.len() as u64,
+    };
+    print_progress(final_prog, final_prog, group_size, t_start.elapsed(), true)?;
 
     summarize(&cols, metadata);
     Ok(())
 }
 
 fn print_progress(
-    n_cols_written: u64,
-    n_cols: u64,
-    n_rows_written: u64,
-    n_rows: u64,
-    n_groups: u64,
+    written: Progress,
+    total: Progress,
     group_size: usize,
     time: std::time::Duration,
     finished: bool,
@@ -182,23 +169,23 @@ fn print_progress(
     use crossterm::*;
     let out = std::io::stderr();
     let mut out = out.lock();
-    let this_group = (n_rows - n_rows_written).min(group_size as u64) as f64;
-    let pc = (n_rows_written as f64 + this_group * n_cols_written as f64 / n_cols as f64)
-        / n_rows as f64
+    let this_group = (total.n_rows - written.n_rows).min(group_size as u64) as f64;
+    let pc = (written.n_rows as f64 + this_group * written.n_cols as f64 / total.n_cols as f64)
+        / total.n_rows as f64
         * 100.0;
     out.queue(cursor::MoveToColumn(1))?
         .queue(terminal::Clear(terminal::ClearType::CurrentLine))?
         .queue(style::Print(format_args!(
             "[{:.2}%] Wrote {}{} rows as {} group{} in {:.1?}{}",
             pc,
-            n_rows_written,
+            written.n_rows,
             if finished {
                 "".to_string()
             } else {
-                format!(" of {} ", n_rows)
+                format!(" of {} ", total.n_rows)
             },
-            n_groups,
-            if n_groups == 1 { "" } else { "s" },
+            written.n_groups,
+            if written.n_groups == 1 { "" } else { "s" },
             time,
             if finished { "\n" } else { "..." },
         )))?
