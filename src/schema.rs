@@ -88,16 +88,21 @@ pub fn infer_schema<'a>(
         // to leave it as RLE
         let encoding = None;
 
-        // Sample 1000 rows randomly and check how many of them are unique
-        let prop_unique: Option<f64> = conn.query_row(
-            &format!(
-                "SELECT CAST(COUNT(DISTINCT {name}) as REAL) / COUNT(*) FROM \
+        let dictionary = match physical_type {
+            PhysicalType::Boolean => false,
+            _ => {
+                // Sample 1000 rows randomly and check how many of them are unique
+                let prop_unique: Option<f64> = conn.query_row(
+                    &format!(
+                        "SELECT CAST(COUNT(DISTINCT {name}) as REAL) / COUNT(*) FROM \
                     (SELECT {name} FROM {table} ORDER BY RANDOM() LIMIT 1000)"
-            ),
-            [],
-            |x| x.get(0),
-        )?;
-        let dictionary = prop_unique.map_or(false, |x| x < 0.75);
+                    ),
+                    [],
+                    |x| x.get(0),
+                )?;
+                prop_unique.map_or(false, |x| x < 0.75)
+            }
+        };
 
         let query = format!("SELECT {} FROM {} ORDER BY rowid", name, table);
         Ok(Column {
