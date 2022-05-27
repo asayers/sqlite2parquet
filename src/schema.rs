@@ -17,7 +17,7 @@ pub fn infer_schema<'a>(
     table: &'a str,
 ) -> Result<impl Iterator<Item = Result<Column>> + 'a> {
     let mut table_info = conn.prepare(&format!("SELECT * FROM pragma_table_info('{}')", table))?;
-    let infos: rusqlite::Result<Vec<(String, String, Option<i32>, bool)>> = table_info
+    let infos: Vec<(String, String, Option<i32>, bool)> = table_info
         .query_map([], |row| {
             let name: String = row.get(1)?;
             let type_string: String = row.get(2)?;
@@ -31,8 +31,8 @@ pub fn infer_schema<'a>(
             let not_null: bool = row.get(3)?;
             Ok((name, type_name, type_len, not_null))
         })?
-        .collect();
-    Ok(infos?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(infos
         .into_iter()
         .map(move |(name, type_name, type_len, not_null)| {
             let _g = info_span!("", table=%name).entered();
