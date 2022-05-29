@@ -16,105 +16,137 @@ pub fn infer_schema<'a>(
     table: &'a str,
 ) -> Result<impl Iterator<Item = Result<Column>> + 'a> {
     let mut table_info = conn.prepare(&format!("SELECT * FROM pragma_table_info('{}')", table))?;
-    let infos: rusqlite::Result<Vec<(String, String, bool)>> = table_info
+    let infos: rusqlite::Result<Vec<(String, String, Option<i32>, bool)>> = table_info
         .query_map([], |row| {
             let name: String = row.get(1)?;
-            let sql_type: String = row.get(2)?;
-            let sql_type = sql_type.to_uppercase();
+            let type_string: String = row.get(2)?;
+            let (type_name, type_len) = if let Some((x, y)) = type_string.split_once(['[', '(']) {
+                let len: i32 = y.strip_suffix([']', ')']).unwrap().parse().unwrap();
+                (x, Some(len))
+            } else {
+                (type_string.as_str(), None)
+            };
+            let type_name = type_name.to_uppercase();
             let not_null: bool = row.get(3)?;
-            Ok((name, sql_type, not_null))
+            Ok((name, type_name, type_len, not_null))
         })?
         .collect();
-    Ok(infos?.into_iter().map(move |(name, sql_type, not_null)| {
-        // If the schema says it's "NOT NULL" then we know there are no nulls.
-        // If the schema allows nulls then we should check to see if there
-        // actually are any in the data.
-        let required: bool = not_null
-            || conn.query_row(
-                &format!("SELECT COUNT(*) == 0 FROM {table} WHERE {name} IS NULL"),
-                [],
-                |x| x.get(0),
-            )?;
-
-        let infer_integer = || {
-            let (min, max): (Option<i64>, Option<i64>) = conn.query_row(
-                &format!("SELECT MIN({name}), MAX({name}) FROM {table}"),
-                [],
-                |x| Ok((x.get(0)?, x.get(1)?)),
-            )?;
-            if max.unwrap_or(0) <= i64::from(i32::MAX) && min.unwrap_or(0) >= i64::from(i32::MIN) {
-                anyhow::Ok(PhysicalType::Int32)
-            } else {
-                anyhow::Ok(PhysicalType::Int64)
-            }
-        };
-        let physical_type = match sql_type.as_str() {
-            "BOOL" => PhysicalType::Boolean,
-            "DATE" => PhysicalType::Int32,
-            "TIME" => PhysicalType::Int64,
-            "DATETIME" | "TIMESTAMP" => PhysicalType::Int64,
-            "UUID" => PhysicalType::FixedLenByteArray(16),
-            "INTERVAL" => PhysicalType::FixedLenByteArray(12),
-            "BIGINT" | "SMALLINT" | "NUM" | "NUMBER" => infer_integer()?,
-            x if x.starts_with("INT") => infer_integer()?,
-            "TEXT" | "CHAR" | "VARCHAR" => PhysicalType::ByteArray,
-            "BLOB" | "BINARY" | "VARBINARY" => PhysicalType::ByteArray,
-            "JSON" | "BSON" => PhysicalType::ByteArray,
-            "FLOAT" => PhysicalType::Float,
-            "REAL" | "DOUBLE" => PhysicalType::Double,
-            x => {
-                eprintln!("Unknown type: {}", x);
-                PhysicalType::ByteArray
-            }
-        };
-        let logical_type = match sql_type.as_str() {
-            "TEXT" | "CHAR" | "VARCHAR" => Some(LogicalType::String),
-            "DATE" => Some(LogicalType::Date),
-            "TIME" => Some(LogicalType::Time(TimeType {
-                utc: false,
-                unit: TimeUnit::Nanos,
-            })),
-            "DATETIME" | "TIMESTAMP" => Some(LogicalType::Timestamp(TimeType {
-                utc: true,
-                unit: TimeUnit::Nanos,
-            })),
-            "UUID" => Some(LogicalType::Uuid),
-            "JSON" => Some(LogicalType::Json),
-            "BSON" => Some(LogicalType::Bson),
-            _ => None,
-        };
-
-        // TODO: Try to figure out when to do DELTA_BINARY_PACKED and when
-        // to leave it as RLE
-        let encoding = None;
-
-        let dictionary = match physical_type {
-            PhysicalType::Boolean => false,
-            _ => {
-                // Sample 1000 rows randomly and check how many of them are unique
-                let prop_unique: Option<f64> = conn.query_row(
-                    &format!(
-                        "SELECT CAST(COUNT(DISTINCT {name}) as REAL) / COUNT(*) FROM \
-                    (SELECT {name} FROM {table} ORDER BY RANDOM() LIMIT 1000)"
-                    ),
+    Ok(infos?
+        .into_iter()
+        .map(move |(name, type_name, type_len, not_null)| {
+            // If the schema says it's "NOT NULL" then we know there are no nulls.
+            // If the schema allows nulls then we should check to see if there
+            // actually are any in the data.
+            let required: bool = not_null
+                || conn.query_row(
+                    &format!("SELECT COUNT(*) == 0 FROM {table} WHERE {name} IS NULL"),
                     [],
                     |x| x.get(0),
                 )?;
-                prop_unique.map_or(false, |x| x < 0.75)
-            }
-        };
 
-        let query = format!("SELECT {} FROM {} ORDER BY rowid", name, table);
-        Ok(Column {
-            name,
-            physical_type,
-            logical_type,
-            required,
-            encoding,
-            dictionary,
-            query,
-        })
-    }))
+            let infer_integer = || {
+                let (min, max): (Option<i64>, Option<i64>) = conn.query_row(
+                    &format!("SELECT MIN({name}), MAX({name}) FROM {table}"),
+                    [],
+                    |x| Ok((x.get(0)?, x.get(1)?)),
+                )?;
+                if max.unwrap_or(0) <= i64::from(i32::MAX)
+                    && min.unwrap_or(0) >= i64::from(i32::MIN)
+                {
+                    anyhow::Ok(PhysicalType::Int32)
+                } else {
+                    anyhow::Ok(PhysicalType::Int64)
+                }
+            };
+            let physical_type = match type_name.as_str() {
+                "BOOL" => PhysicalType::Boolean,
+                "DATE" => PhysicalType::Int32,
+                "TIME" => PhysicalType::Int64,
+                "DATETIME" | "TIMESTAMP" => PhysicalType::Int64,
+                "UUID" => PhysicalType::FixedLenByteArray(16),
+                "INTERVAL" => PhysicalType::FixedLenByteArray(12),
+                "BIGINT" | "SMALLINT" | "NUM" | "NUMBER" => infer_integer()?,
+                x if x.starts_with("INT") => infer_integer()?,
+                // parquet-rs doesn't allow us to back LogicalType::String
+                // columns with PhysicalType::FixedLenByteArray, so if a column
+                // is declared as eg. TEXT[15] we need to decide whether to
+                // preserve the fixed-length property or the information that
+                // this byte array is a string.  Here we plumb for "string".
+                "TEXT" | "CHAR" | "VARCHAR" | "NVARCHAR" => PhysicalType::ByteArray,
+                "BLOB" | "BINARY" | "VARBINARY" => {
+                    if let Some(len) = type_len {
+                        PhysicalType::FixedLenByteArray(len)
+                    } else {
+                        PhysicalType::ByteArray
+                    }
+                }
+                "JSON" | "BSON" => PhysicalType::ByteArray,
+                "FLOAT" => PhysicalType::Float,
+                "REAL" | "DOUBLE" => PhysicalType::Double,
+                x => {
+                    eprintln!("{name}: Unknown type: {}", x);
+                    PhysicalType::ByteArray
+                }
+            };
+            match (type_len, physical_type.len()) {
+                (Some(len), None) => eprintln!(
+                    "{name}: Ignoring length annotation: \
+                    {type_name}[{len}]"
+                ),
+                (Some(len1), Some(len2)) if len1 != len2 => eprintln!(
+                    "{name}: Overriding length annotation: {type_name}[{len1}] \
+                    -> {type_name}[{len2}]"
+                ),
+                _ => (),
+            }
+            let logical_type = match type_name.as_str() {
+                "TEXT" | "CHAR" | "VARCHAR" | "NVARCHAR" => Some(LogicalType::String),
+                "DATE" => Some(LogicalType::Date),
+                "TIME" => Some(LogicalType::Time(TimeType {
+                    utc: false,
+                    unit: TimeUnit::Nanos,
+                })),
+                "DATETIME" | "TIMESTAMP" => Some(LogicalType::Timestamp(TimeType {
+                    utc: true,
+                    unit: TimeUnit::Nanos,
+                })),
+                "UUID" => Some(LogicalType::Uuid),
+                "JSON" => Some(LogicalType::Json),
+                "BSON" => Some(LogicalType::Bson),
+                _ => None,
+            };
+
+            // TODO: Try to figure out when to do DELTA_BINARY_PACKED and when
+            // to leave it as RLE
+            let encoding = None;
+
+            let dictionary = match physical_type {
+                PhysicalType::Boolean => false,
+                _ => {
+                    // Sample 1000 rows randomly and check how many of them are unique
+                    let prop_unique: Option<f64> = conn.query_row(
+                        &format!(
+                            "SELECT CAST(COUNT(DISTINCT {name}) as REAL) / COUNT(*) FROM \
+                    (SELECT {name} FROM {table} ORDER BY RANDOM() LIMIT 1000)"
+                        ),
+                        [],
+                        |x| x.get(0),
+                    )?;
+                    prop_unique.map_or(false, |x| x < 0.75)
+                }
+            };
+
+            let query = format!("SELECT {} FROM {} ORDER BY rowid", name, table);
+            Ok(Column {
+                name,
+                physical_type,
+                logical_type,
+                required,
+                encoding,
+                dictionary,
+                query,
+            })
+        }))
 }
 
 #[derive(Debug, PartialEq, Clone, serde::Deserialize)]
