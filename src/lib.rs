@@ -242,7 +242,7 @@ where
             // technically all be zeroes, but in that case the levels will
             // be discarded so it doesn't matter.
             defs.push(1);
-            vals.push(T::T::from_sqlite(x));
+            vals.push(T::T::from_sqlite(x)?);
         }
         iter.advance()?;
     }
