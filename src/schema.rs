@@ -311,6 +311,28 @@ impl fmt::Display for TimeUnit {
     }
 }
 
+impl PhysicalType {
+    fn as_parquet(&self) -> parquet::basic::Type {
+        match self {
+            PhysicalType::Boolean => parquet::basic::Type::BOOLEAN,
+            PhysicalType::Int32 => parquet::basic::Type::INT32,
+            PhysicalType::Int64 => parquet::basic::Type::INT64,
+            PhysicalType::Float => parquet::basic::Type::FLOAT,
+            PhysicalType::Double => parquet::basic::Type::DOUBLE,
+            PhysicalType::ByteArray => parquet::basic::Type::BYTE_ARRAY,
+            PhysicalType::FixedLenByteArray(_) => parquet::basic::Type::FIXED_LEN_BYTE_ARRAY,
+        }
+    }
+
+    fn len(&self) -> Option<i32> {
+        use PhysicalType::*;
+        match self {
+            FixedLenByteArray(length) => Some(*length),
+            Boolean | Int32 | Int64 | Float | Double | ByteArray => None,
+        }
+    }
+}
+
 impl LogicalType {
     fn as_parquet(&self) -> parquet::basic::LogicalType {
         match *self {
@@ -362,17 +384,8 @@ impl Column {
             true => parquet::basic::Repetition::REQUIRED,
             false => parquet::basic::Repetition::OPTIONAL,
         };
-        let (physical_type, length) = match self.physical_type {
-            PhysicalType::Boolean => (parquet::basic::Type::BOOLEAN, 0),
-            PhysicalType::Int32 => (parquet::basic::Type::INT32, 0),
-            PhysicalType::Int64 => (parquet::basic::Type::INT64, 0),
-            PhysicalType::Float => (parquet::basic::Type::FLOAT, 0),
-            PhysicalType::Double => (parquet::basic::Type::DOUBLE, 0),
-            PhysicalType::ByteArray => (parquet::basic::Type::BYTE_ARRAY, 0),
-            PhysicalType::FixedLenByteArray(length) => {
-                (parquet::basic::Type::FIXED_LEN_BYTE_ARRAY, length)
-            }
-        };
+        let physical_type = self.physical_type.as_parquet();
+        let length = self.physical_type.len().unwrap_or(0);
         let logical_type = self.logical_type.map(|x| x.as_parquet());
         Ok(
             parquet::schema::types::Type::primitive_type_builder(&self.name, physical_type)
