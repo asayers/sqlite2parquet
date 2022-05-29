@@ -45,6 +45,7 @@ pub struct Opts {
 
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
+    tracing_subscriber::fmt::init();
 
     let mut config: HashMap<String, Vec<Column>> = if let Some(path) = opts.config {
         serde_yaml::from_reader(std::fs::File::open(path)?)?

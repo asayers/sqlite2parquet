@@ -22,7 +22,9 @@ rusqlite = "0.27.0"
 serde = { version = "1.0.137", features = ["derive"] }
 serde_yaml = { version = "0.8.24", optional = true }
 thousands = { version = "0.2.0", optional = true }
+tracing = "0.1.34"
+tracing-subscriber = { version = "0.3.11", optional = true }
 
 [features]
-cli = ["clap", "crossterm", "serde_yaml", "thousands"]
+cli = ["clap", "crossterm", "serde_yaml", "thousands", "tracing-subscriber"]
 default = ["cli"]

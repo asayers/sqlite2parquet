@@ -1,6 +1,7 @@
 use crate::Result;
 use rusqlite::Connection;
 use std::fmt;
+use tracing::*;
 
 /// Infer a parquet schema to use for this dataset.
 ///
@@ -34,6 +35,7 @@ pub fn infer_schema<'a>(
     Ok(infos?
         .into_iter()
         .map(move |(name, type_name, type_len, not_null)| {
+            let _g = info_span!("", table=%name).entered();
             // If the schema says it's "NOT NULL" then we know there are no nulls.
             // If the schema allows nulls then we should check to see if there
             // actually are any in the data.
@@ -84,18 +86,15 @@ pub fn infer_schema<'a>(
                 "FLOAT" => PhysicalType::Float,
                 "REAL" | "DOUBLE" => PhysicalType::Double,
                 x => {
-                    eprintln!("{name}: Unknown type: {}", x);
+                    warn!("Unknown type: {x}");
                     PhysicalType::ByteArray
                 }
             };
             match (type_len, physical_type.len()) {
-                (Some(len), None) => eprintln!(
-                    "{name}: Ignoring length annotation: \
-                    {type_name}[{len}]"
-                ),
-                (Some(len1), Some(len2)) if len1 != len2 => eprintln!(
-                    "{name}: Overriding length annotation: {type_name}[{len1}] \
-                    -> {type_name}[{len2}]"
+                (Some(len), None) => warn!("Ignoring length annotation: {type_name}[{len}]"),
+                (Some(len1), Some(len2)) if len1 != len2 => warn!(
+                    "Overriding length annotation: {type_name}[{len1}] -> \
+                    {type_name}[{len2}]"
                 ),
                 _ => (),
             }
