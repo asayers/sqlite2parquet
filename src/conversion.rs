@@ -10,7 +10,7 @@ impl FromSqlite for bool {
         match x {
             ValueRef::Integer(x) => x == 1,
             ValueRef::Null => unreachable!("Nulls are handled separately"),
-            _ => panic!(),
+            _ => panic!("Can't convert {x:?} to a bool!"),
         }
     }
 }
@@ -19,7 +19,7 @@ impl FromSqlite for i32 {
         match x {
             ValueRef::Integer(x) => i32::try_from(x).unwrap(),
             ValueRef::Null => unreachable!("Nulls are handled separately"),
-            _ => panic!(),
+            _ => panic!("Can't convert {x:?} to a i32"),
         }
     }
 }
@@ -28,7 +28,7 @@ impl FromSqlite for i64 {
         match x {
             ValueRef::Integer(x) => x,
             ValueRef::Null => unreachable!("Nulls are handled separately"),
-            _ => panic!(),
+            _ => panic!("Can't convert {x:?} to an i64!"),
         }
     }
 }
@@ -37,7 +37,7 @@ impl FromSqlite for Int96 {
         match x {
             ValueRef::Integer(_) => todo!(),
             ValueRef::Null => unreachable!("Nulls are handled separately"),
-            _ => panic!(),
+            _ => panic!("Can't convert {x:?} to a Int96"),
         }
     }
 }
@@ -46,7 +46,7 @@ impl FromSqlite for f32 {
         match x {
             ValueRef::Real(x) => x as f32,
             ValueRef::Null => unreachable!("Nulls are handled separately"),
-            _ => panic!(),
+            _ => panic!("Can't convert {x:?} to a f32!"),
         }
     }
 }
@@ -55,7 +55,7 @@ impl FromSqlite for f64 {
         match x {
             ValueRef::Real(x) => x,
             ValueRef::Null => unreachable!("Nulls are handled separately"),
-            _ => panic!(),
+            _ => panic!("Can't convert {x:?} to a f64!"),
         }
     }
 }
@@ -76,7 +76,7 @@ impl FromSqlite for FixedLenByteArray {
             ValueRef::Text(_) => todo!(),
             ValueRef::Blob(_) => todo!(),
             ValueRef::Null => unreachable!("Nulls are handled separately"),
-            _ => panic!(),
+            _ => panic!("Can't convert {x:?} to a FixedLenByteArray!"),
         }
     }
 }
