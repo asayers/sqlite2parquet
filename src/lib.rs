@@ -73,16 +73,13 @@ use crate::conversion::FromSqlite;
 pub use crate::schema::*;
 use anyhow::{Context, Result};
 use fallible_streaming_iterator::FallibleStreamingIterator;
-use parquet::file::writer::FileWriter;
+use parquet::file::writer::SerializedFileWriter;
 use rusqlite::Connection;
+use std::fs::File;
 use std::path::Path;
 use std::sync::Arc;
 
-fn mk_writer(
-    table_name: &str,
-    cols: &[Column],
-    out: &Path,
-) -> Result<impl parquet::file::writer::FileWriter> {
+fn mk_writer(table_name: &str, cols: &[Column], out: &Path) -> Result<SerializedFileWriter<File>> {
     let mut fields = cols
         .iter()
         .map(|col| Arc::new(col.as_parquet().unwrap()))
@@ -100,8 +97,8 @@ fn mk_writer(
         bldr = bldr.set_column_dictionary_enabled(path, col.dictionary);
     }
     let props = bldr.build();
-    Ok(parquet::file::writer::SerializedFileWriter::new(
-        std::fs::File::create(out)?,
+    Ok(SerializedFileWriter::new(
+        File::create(out)?,
         Arc::new(schema),
         Arc::new(props),
     )?)
@@ -180,11 +177,11 @@ pub fn write_table_with_progress(
 }
 
 fn write_group(
-    wtr: &mut impl parquet::file::writer::FileWriter,
+    wtr: &mut SerializedFileWriter<File>,
     selects: &mut [rusqlite::Rows],
     group_size: usize,
     mut progress_cb: impl FnMut(u64) -> Result<()>,
-) -> Result<()> {
+) -> Result<Arc<parquet::file::metadata::RowGroupMetaData>> {
     let mut group_wtr = wtr.next_row_group()?;
     let mut selects_iter = selects.iter_mut();
     let mut n_cols_written = 0;
@@ -193,7 +190,7 @@ fn write_group(
         let select = selects_iter.next().unwrap();
 
         use parquet::column::writer::ColumnWriter::*;
-        let x = match &mut col_wtr {
+        let x = match col_wtr.untyped() {
             BoolColumnWriter(wtr) => write_col(select, group_size, wtr),
             Int32ColumnWriter(wtr) => write_col(select, group_size, wtr),
             Int64ColumnWriter(wtr) => write_col(select, group_size, wtr),
@@ -204,13 +201,12 @@ fn write_group(
             FixedLenByteArrayColumnWriter(wtr) => write_col(select, group_size, wtr),
         };
         x.context(format!("Column {}", n_cols_written))?;
-        group_wtr
-            .close_column(col_wtr)
+        col_wtr
+            .close()
             .context(format!("Column {}", n_cols_written))?;
         n_cols_written += 1;
     }
-    wtr.close_row_group(group_wtr)?;
-    Ok(())
+    Ok(group_wtr.close()?)
 }
 
 fn write_col<T>(
