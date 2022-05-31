@@ -1,4 +1,5 @@
 /target
+/tests
 .history
 *.sqlite3
 *.parquet
