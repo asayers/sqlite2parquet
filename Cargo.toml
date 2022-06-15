@@ -9,20 +9,16 @@ repository = "https://github.com/asayers/sqlite2parquet"
 
 [dependencies]
 anyhow = "1.0.52"
-# Chrono is not a direct dependency; it's a dependency of "parquet".  However,
-# parquet's Cargo.toml is slightly buggy, so if we don't specify chrono here
-# then parquet fails to compile.
-chrono = { version = "0.4.19", default-features = false, features = ["clock"] }
-clap = { version = "3.1.18", optional = true, features = ["derive"] }
+clap = { version = "3.2.4", optional = true, features = ["derive"] }
 crossterm = { version = "0.23.0", optional = true }
 fallible-streaming-iterator = "0.1.9"
-parquet = { version = "15.0.0", default-features = false, features = ["zstd"] }
+parquet = { version = "16.0.0", default-features = false, features = ["zstd"] }
 parquet-format = "4.0.0"
 rusqlite = "0.27.0"
 serde = { version = "1.0.137", features = ["derive"] }
 serde_yaml = { version = "0.8.24", optional = true }
 thousands = { version = "0.2.0", optional = true }
-tracing = "0.1.34"
+tracing = "0.1.35"
 tracing-subscriber = { version = "0.3.11", optional = true }
 
 [features]
