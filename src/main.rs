@@ -90,7 +90,7 @@ const COLUMN_HEADER: &str =
 fn mk_table(
     conn: &Connection,
     table: &str,
-    out: &Path,
+    outpath: &Path,
     // Infer if `None`
     config: Option<Vec<Column>>,
     group_size: usize,
@@ -140,12 +140,14 @@ fn mk_table(
     let group_size = group_size.max(1);
     println!("Group size: {}", group_size);
 
+    let outfile = std::fs::File::create(outpath)?;
+
     let t_start = std::time::Instant::now();
     let metadata = sqlite2parquet::write_table_with_progress(
         conn,
         table,
         &cols,
-        out,
+        outfile,
         group_size,
         |written| print_progress(written, total, group_size, t_start.elapsed(), false),
     )?;

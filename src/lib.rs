@@ -75,11 +75,14 @@ use anyhow::{Context, Result};
 use fallible_streaming_iterator::FallibleStreamingIterator;
 use parquet::file::writer::SerializedFileWriter;
 use rusqlite::Connection;
-use std::fs::File;
-use std::path::Path;
+use std::io::Write;
 use std::sync::Arc;
 
-fn mk_writer(table_name: &str, cols: &[Column], out: &Path) -> Result<SerializedFileWriter<File>> {
+fn mk_writer<W: Write>(
+    table_name: &str,
+    cols: &[Column],
+    out: W,
+) -> Result<SerializedFileWriter<W>> {
     let mut fields = cols
         .iter()
         .map(|col| Arc::new(col.as_parquet().unwrap()))
@@ -98,7 +101,7 @@ fn mk_writer(table_name: &str, cols: &[Column], out: &Path) -> Result<Serialized
     }
     let props = bldr.build();
     Ok(SerializedFileWriter::new(
-        File::create(out)?,
+        out,
         Arc::new(schema),
         Arc::new(props),
     )?)
@@ -121,7 +124,7 @@ pub fn write_table(
     conn: &Connection,
     table_name: &str,
     cols: &[Column],
-    out: &Path,
+    out: impl Write,
     group_size: usize,
 ) -> Result<parquet_format::FileMetaData> {
     write_table_with_progress(conn, table_name, cols, out, group_size, |_| Ok(()))
@@ -145,7 +148,7 @@ pub fn write_table_with_progress(
     conn: &Connection,
     table_name: &str,
     cols: &[Column],
-    out: &Path,
+    out: impl Write,
     group_size: usize,
     mut progress_cb: impl FnMut(Progress) -> Result<()>,
 ) -> Result<parquet_format::FileMetaData> {
@@ -176,8 +179,8 @@ pub fn write_table_with_progress(
     Ok(metadata)
 }
 
-fn write_group(
-    wtr: &mut SerializedFileWriter<File>,
+fn write_group<W: Write>(
+    wtr: &mut SerializedFileWriter<W>,
     selects: &mut [rusqlite::Rows],
     group_size: usize,
     mut progress_cb: impl FnMut(u64) -> Result<()>,
