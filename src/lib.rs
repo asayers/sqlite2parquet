@@ -126,7 +126,7 @@ pub fn write_table(
     cols: &[Column],
     out: impl Write,
     group_size: usize,
-) -> Result<parquet_format::FileMetaData> {
+) -> Result<parquet::format::FileMetaData> {
     write_table_with_progress(conn, table_name, cols, out, group_size, |_| Ok(()))
 }
 
@@ -151,7 +151,7 @@ pub fn write_table_with_progress(
     out: impl Write,
     group_size: usize,
     mut progress_cb: impl FnMut(Progress) -> Result<()>,
-) -> Result<parquet_format::FileMetaData> {
+) -> Result<parquet::format::FileMetaData> {
     let mut wtr = mk_writer(table_name, cols, out)?;
 
     let mut stmnts = cols

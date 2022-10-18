@@ -364,15 +364,17 @@ impl LogicalType {
 }
 
 impl TimeUnit {
-    fn as_parquet(&self) -> parquet::basic::TimeUnit {
+    fn as_parquet(&self) -> parquet::format::TimeUnit {
         match self {
             TimeUnit::Millis => {
-                parquet::basic::TimeUnit::MILLIS(parquet_format::MilliSeconds::new())
+                parquet::format::TimeUnit::MILLIS(parquet::format::MilliSeconds::new())
             }
             TimeUnit::Micros => {
-                parquet::basic::TimeUnit::MICROS(parquet_format::MicroSeconds::new())
+                parquet::format::TimeUnit::MICROS(parquet::format::MicroSeconds::new())
             }
-            TimeUnit::Nanos => parquet::basic::TimeUnit::NANOS(parquet_format::NanoSeconds::new()),
+            TimeUnit::Nanos => {
+                parquet::format::TimeUnit::NANOS(parquet::format::NanoSeconds::new())
+            }
         }
     }
 }

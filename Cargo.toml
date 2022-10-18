@@ -12,8 +12,7 @@ anyhow = "1.0.59"
 clap = { version = "3.2.16", optional = true, features = ["derive"] }
 crossterm = { version = "0.24.0", optional = true }
 fallible-streaming-iterator = "0.1.9"
-parquet = { version = "19.0.0", default-features = false, features = ["zstd"] }
-parquet-format = "4.0.0"
+parquet = { version = "27.0.0", default-features = false, features = ["zstd"] }
 rusqlite = "0.28.0"
 serde = { version = "1.0.141", features = ["derive"] }
 serde_yaml = { version = "0.9.2", optional = true }

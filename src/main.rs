@@ -196,7 +196,7 @@ fn print_progress(
     Ok(())
 }
 
-fn summarize(cols: &[Column], metadata: parquet_format::FileMetaData) {
+fn summarize(cols: &[Column], metadata: parquet::format::FileMetaData) {
     fn fmt_bytes(bytes: i64) -> String {
         use thousands::Separable;
         format!("{:>9} KiB", (bytes / 1024).separate_with_commas())
