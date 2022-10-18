@@ -25,7 +25,7 @@ let cols = sqlite2parquet::infer_schema(&conn, "my_table")
     .unwrap()
     .collect::<anyhow::Result<Vec<_>>>()
     .unwrap();
-let out_path = std::path::PathBuf::from("my_table.parquet");
+let out_path = std::fs::File::create("my_table.parquet").unwrap();
 sqlite2parquet::write_table(&conn, "my_table", &cols, &out_path, 1_000_000).unwrap();
 ```
 
@@ -60,7 +60,7 @@ let cols = vec![
     },
 ];
 
-let out_path = std::path::PathBuf::from("category_start_times.parquet");
+let out_path = std::fs::File::create("category_start_times.parquet").unwrap();
 write_table(&conn, "category_start_times", &cols, &out_path, 1_000_000).unwrap();
 ```
 
