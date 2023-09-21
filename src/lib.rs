@@ -78,20 +78,20 @@ use rusqlite::Connection;
 use std::io::Write;
 use std::sync::Arc;
 
-fn mk_writer<W: Write>(
+fn mk_writer<W: Write + Send>(
     table_name: &str,
     cols: &[Column],
     out: W,
 ) -> Result<SerializedFileWriter<W>> {
-    let mut fields = cols
+    let fields = cols
         .iter()
         .map(|col| Arc::new(col.as_parquet().unwrap()))
         .collect::<Vec<_>>();
     let schema = parquet::schema::types::Type::group_type_builder(table_name)
-        .with_fields(&mut fields)
+        .with_fields(fields)
         .build()?;
     let mut bldr = parquet::file::properties::WriterProperties::builder()
-        .set_compression(parquet::basic::Compression::ZSTD);
+        .set_compression(parquet::basic::Compression::ZSTD(Default::default()));
     for col in cols {
         let path = parquet::schema::types::ColumnPath::new(vec![col.name.clone()]);
         if let Some(enc) = col.encoding() {
@@ -124,7 +124,7 @@ pub fn write_table(
     conn: &Connection,
     table_name: &str,
     cols: &[Column],
-    out: impl Write,
+    out: impl Write + Send,
     group_size: usize,
 ) -> Result<parquet::format::FileMetaData> {
     write_table_with_progress(conn, table_name, cols, out, group_size, |_| Ok(()))
@@ -148,7 +148,7 @@ pub fn write_table_with_progress(
     conn: &Connection,
     table_name: &str,
     cols: &[Column],
-    out: impl Write,
+    out: impl Write + Send,
     group_size: usize,
     mut progress_cb: impl FnMut(Progress) -> Result<()>,
 ) -> Result<parquet::format::FileMetaData> {
@@ -179,7 +179,7 @@ pub fn write_table_with_progress(
     Ok(metadata)
 }
 
-fn write_group<W: Write>(
+fn write_group<W: Write + Send>(
     wtr: &mut SerializedFileWriter<W>,
     selects: &mut [rusqlite::Rows],
     group_size: usize,
